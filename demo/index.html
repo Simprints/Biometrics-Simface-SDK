@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimFace Demo</title>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <p class="eyebrow">Local demo</p>
+        <h1>SimFace SDK Demo App</h1>
+        <p class="hero-copy">
+          This page uses the built SDK artifact from <code>dist/</code> and talks to a real local backend.
+          Use it to demo validate, enroll, and verify flows from a simple mock frontend.
+        </p>
+      </header>
+
+      <main class="layout">
+        <section class="card">
+          <h2>Demo configuration</h2>
+          <p class="section-copy">
+            The demo defaults to <code>http://localhost:8080</code>. Keep the backend CORS setting compatible with the demo
+            origin, or set <code>ALLOWED_ORIGINS=*</code> for local use.
+          </p>
+
+          <form id="config-form" class="config-form">
+            <label>
+              <span>API URL</span>
+              <input id="api-url" name="apiUrl" type="url" placeholder="http://localhost:8080" />
+            </label>
+
+            <label>
+              <span>Project ID</span>
+              <input id="project-id" name="projectId" type="text" placeholder="demo-project" />
+            </label>
+
+            <label>
+              <span>API key</span>
+              <input id="api-key" name="apiKey" type="password" placeholder="demo-api-key" />
+            </label>
+
+            <label>
+              <span>Client ID</span>
+              <input id="client-id" name="clientId" type="text" placeholder="demo-user-123" />
+            </label>
+          </form>
+
+          <div class="actions">
+            <button id="validate-button" type="button" class="button button-secondary">Validate API key</button>
+            <button id="enroll-button" type="button" class="button button-primary">Enroll user</button>
+            <button id="verify-button" type="button" class="button button-primary">Verify user</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="status-row">
+            <h2>Run status</h2>
+            <span id="status-badge" class="status status-idle">Idle</span>
+          </div>
+
+          <p id="status-copy" class="section-copy">
+            Click <strong>Enroll</strong> or <strong>Verify</strong> to open the SDK capture flow with the real backend.
+          </p>
+
+          <h3>Latest result</h3>
+          <pre id="result-output" class="result-output">No action has been run yet.</pre>
+        </section>
+
+        <section class="card">
+          <h2>Local demo checklist</h2>
+          <ol class="checklist">
+            <li>Build the SDK at the repo root before starting the demo.</li>
+            <li>Run the backend locally with valid GCP credentials and the TFLite model.</li>
+            <li>Use this page on <code>localhost</code> so camera capture works reliably in the browser.</li>
+            <li>Keep internet access available for the MediaPipe detector assets used by the SDK.</li>
+          </ol>
+        </section>
+
+        <section class="card card-log">
+          <div class="status-row">
+            <h2>Event log</h2>
+            <button id="clear-log-button" type="button" class="button button-ghost">Clear log</button>
+          </div>
+          <ul id="event-log" class="event-log">
+            <li class="event-log-empty">The demo log is empty.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

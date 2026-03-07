@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vite/
+demo/node_modules/
+demo/dist/
+demo/.vite/
+
+.idea/workspace.xml
+.idea/copilot.data.migration.ask2agent.xml
+.vscode/
+
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,15 @@
+{
+  "name": "simface-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "check:sdk": "node ./scripts/check-sdk-dist.mjs",
+    "dev": "npm run check:sdk && vite",
+    "build": "npm run check:sdk && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
