@@ -2,9 +2,10 @@ import './styles.css';
 import { enroll, verify, SimFaceAPIClient } from '@simprints/simface-sdk';
 
 const STORAGE_KEY = 'simface-demo-config';
+const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
 
 const defaults = {
-  apiUrl: 'http://localhost:8080',
+  apiUrl: DEFAULT_API_URL,
   projectId: '',
   apiKey: '',
   clientId: 'demo-user-123',
@@ -35,7 +36,7 @@ wireActions();
 
 function loadConfig() {
   const saved = readStoredConfig();
-  const config = { ...defaults, ...saved };
+  const config = { ...defaults, ...saved, apiUrl: normalizeApiUrl(saved.apiUrl) };
 
   for (const [key, field] of Object.entries(fields)) {
     field.value = config[key] ?? '';
@@ -71,7 +72,7 @@ function wireActions() {
 
 function getConfig() {
   return {
-    apiUrl: fields.apiUrl.value.trim(),
+    apiUrl: normalizeApiUrl(fields.apiUrl.value),
     projectId: fields.projectId.value.trim(),
     apiKey: fields.apiKey.value.trim(),
     clientId: fields.clientId.value.trim(),
@@ -175,9 +176,18 @@ function clearLog() {
 
 function describeActionStart(action) {
   if (action === 'validate') {
-    return 'Validating API credentials against the local backend.';
+    return 'Validating API credentials against the configured backend.';
   }
   return `${capitalize(action)} flow started. The SDK will open the capture flow in the browser.`;
+}
+
+function normalizeApiUrl(value) {
+  if (typeof value !== 'string') {
+    return DEFAULT_API_URL;
+  }
+
+  const normalized = value.trim();
+  return normalized || DEFAULT_API_URL;
 }
 
 function summarizeActionResult(action, result) {

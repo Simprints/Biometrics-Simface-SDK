@@ -8,11 +8,11 @@
   <body>
     <div class="page">
       <header class="hero">
-        <p class="eyebrow">Local demo</p>
+        <p class="eyebrow">SDK demo</p>
         <h1>SimFace SDK Demo App</h1>
         <p class="hero-copy">
-          This page uses the built SDK artifact from <code>dist/</code> and talks to a real local backend.
-          Use it to demo validate, enroll, and verify flows from a simple mock frontend.
+          This page uses the built SDK artifact from <code>dist/</code> and targets the hosted SimFace backend by
+          default. Override the API URL below if you want to point the demo at a different backend.
         </p>
       </header>
 
@@ -20,14 +20,20 @@
         <section class="card">
           <h2>Demo configuration</h2>
           <p class="section-copy">
-            The demo defaults to <code>http://localhost:8080</code>. Keep the backend CORS setting compatible with the demo
-            origin, or set <code>ALLOWED_ORIGINS=*</code> for local use.
+            The demo defaults to
+            <code>https://simface-api-85584555549.europe-west1.run.app</code>. You can override the API URL at any
+            time. If you point the demo at a different backend, keep its CORS setting compatible with the demo origin.
           </p>
 
           <form id="config-form" class="config-form">
             <label>
               <span>API URL</span>
-              <input id="api-url" name="apiUrl" type="url" placeholder="http://localhost:8080" />
+              <input
+                id="api-url"
+                name="apiUrl"
+                type="url"
+                placeholder="https://simface-api-85584555549.europe-west1.run.app"
+              />
             </label>
 
             <label>
@@ -68,10 +74,10 @@
         </section>
 
         <section class="card">
-          <h2>Local demo checklist</h2>
+          <h2>Demo checklist</h2>
           <ol class="checklist">
             <li>Build the SDK at the repo root before starting the demo.</li>
-            <li>Run the backend locally with valid GCP credentials and the TFLite model.</li>
+            <li>Use the hosted backend by default, or run your own backend and override the API URL in the form.</li>
             <li>Use this page on <code>localhost</code> so camera capture works reliably in the browser.</li>
             <li>Keep internet access available for the MediaPipe detector assets used by the SDK.</li>
           </ol>
