@@ -53,6 +53,7 @@ export interface FaceQualityResult {
   hasFace: boolean;
   faceCount: number;
   confidence: number;
+  captureScore: number;
   isCentered: boolean;
   passesQualityChecks: boolean;
   feedback: FaceFeedbackCode;

@@ -8,7 +8,9 @@ type CaptureState = 'idle' | 'starting' | 'live' | 'preview' | 'error';
 type FeedbackTone = 'neutral' | 'success' | 'error';
 
 const AUTO_CAPTURE_ANALYSIS_INTERVAL_MS = 180;
-const AUTO_CAPTURE_STABLE_FRAMES = 3;
+const AUTO_CAPTURE_COUNTDOWN_MS = 5000;
+const GUIDE_PATH = 'M 50 10 H 64 A 18 18 0 0 1 82 28 V 72 A 18 18 0 0 1 64 90 H 36 A 18 18 0 0 1 18 72 V 28 A 18 18 0 0 1 36 10 H 50 Z';
+const GUIDE_MASK_PATH = `M 0 0 H 100 V 100 H 0 Z ${GUIDE_PATH}`;
 
 /**
  * <simface-capture> — Web Component for capturing and quality-checking face images.
@@ -30,6 +32,7 @@ export class SimFaceCapture extends LitElement {
   @state() private feedbackMessage = 'Start a capture to see camera guidance here.';
   @state() private feedbackTone: FeedbackTone = 'neutral';
   @state() private previewUrl = '';
+  @state() private countdownProgress = 0;
   @state() private qualityResult: FaceQualityResult | null = null;
 
   @query('#embedded-video') private embeddedVideoElement?: HTMLVideoElement;
@@ -38,8 +41,11 @@ export class SimFaceCapture extends LitElement {
   private animationFrameId: number | null = null;
   private analysisInFlight = false;
   private lastAnalysisTimestamp = 0;
-  private stableFrameCount = 0;
   private capturedBlob: Blob | null = null;
+  private countdownStartedAt: number | null = null;
+  private bestCaptureBlob: Blob | null = null;
+  private bestCaptureScore = -1;
+  private bestQualityResult: FaceQualityResult | null = null;
 
   static styles = css`
     :host {
@@ -100,23 +106,41 @@ export class SimFaceCapture extends LitElement {
       z-index: 2;
     }
 
-    .guide {
+    .guide-overlay {
       position: absolute;
       inset: 0;
       pointer-events: none;
+      z-index: 3;
     }
 
-    .guide::before {
-      content: '';
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 62%;
-      height: 76%;
-      transform: translate(-50%, -50%);
-      border-radius: 999px;
-      border: 3px solid rgba(255, 255, 255, 0.92);
-      box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.38);
+    .guide-overlay svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .guide-mask {
+      fill: rgba(148, 163, 184, 0.275);
+      fill-rule: evenodd;
+    }
+
+    .ring-outline {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.92);
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: #22c55e;
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 100;
+      stroke-dashoffset: calc(100 - var(--capture-progress, 0) * 100);
+      transition: stroke-dashoffset 0.14s linear;
     }
 
     .btn-row {
@@ -311,7 +335,16 @@ export class SimFaceCapture extends LitElement {
                 src=${this.previewUrl}
                 alt="Captured face preview"
               />
-              <div class="guide ${this.captureState === 'live' || this.captureState === 'starting' ? '' : 'hidden'}"></div>
+              <div
+                class="guide-overlay ${this.captureState === 'live' || this.captureState === 'starting' ? '' : 'hidden'}"
+                style=${`--capture-progress:${this.countdownProgress};`}
+              >
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                  <path class="guide-mask" d=${GUIDE_MASK_PATH}></path>
+                  <path class="ring-outline" d=${GUIDE_PATH}></path>
+                  <path class="ring-progress" d=${GUIDE_PATH} pathLength="100"></path>
+                </svg>
+              </div>
             </div>
           `}
 
@@ -450,18 +483,29 @@ export class SimFaceCapture extends LitElement {
       try {
         const qualityResult = await assessFaceQualityForVideo(video, timestamp);
         this.qualityResult = qualityResult;
-        this.feedbackMessage = qualityResult.message;
-        this.feedbackTone = qualityResult.passesQualityChecks ? 'success' : 'neutral';
-
         if (qualityResult.passesQualityChecks) {
-          this.stableFrameCount += 1;
-        } else {
-          this.stableFrameCount = 0;
+          if (this.countdownStartedAt === null) {
+            this.countdownStartedAt = timestamp;
+            this.countdownProgress = 0;
+            this.feedbackMessage = 'Great framing detected. Hold still while we pick the best frame.';
+            this.feedbackTone = 'success';
+          }
+
+          await this.considerBestFrame(video, qualityResult);
         }
 
-        if (this.stableFrameCount >= AUTO_CAPTURE_STABLE_FRAMES) {
-          await this.captureEmbeddedFrame();
-          return;
+        if (this.countdownStartedAt !== null) {
+          this.countdownProgress = Math.min((timestamp - this.countdownStartedAt) / AUTO_CAPTURE_COUNTDOWN_MS, 1);
+          this.feedbackMessage = this.countdownMessage(timestamp, qualityResult);
+          this.feedbackTone = qualityResult.passesQualityChecks ? 'success' : 'neutral';
+
+          if (this.countdownProgress >= 1) {
+            this.finishCountdownCapture();
+            return;
+          }
+        } else {
+          this.feedbackMessage = qualityResult.message;
+          this.feedbackTone = 'neutral';
         }
       } catch {
         this.feedbackMessage = 'Automatic analysis is unavailable. Use Take photo now.';
@@ -500,9 +544,41 @@ export class SimFaceCapture extends LitElement {
       }
 
       this.previewUrl = URL.createObjectURL(blob);
+      this.countdownProgress = 0;
     } catch (error) {
       this.handleEmbeddedError(error);
     }
+  }
+
+  private async considerBestFrame(video: HTMLVideoElement, qualityResult: FaceQualityResult) {
+    if (qualityResult.captureScore <= this.bestCaptureScore) {
+      return;
+    }
+
+    const blob = await this.captureVideoFrame(video);
+    this.bestCaptureBlob = blob;
+    this.bestCaptureScore = qualityResult.captureScore;
+    this.bestQualityResult = qualityResult;
+  }
+
+  private finishCountdownCapture() {
+    if (!this.bestCaptureBlob) {
+      void this.captureEmbeddedFrame();
+      return;
+    }
+
+    this.capturedBlob = this.bestCaptureBlob;
+    this.qualityResult = this.bestQualityResult;
+    this.captureState = 'preview';
+    this.feedbackMessage = this.bestCaptureMessage();
+    this.feedbackTone = 'success';
+
+    if (this.previewUrl) {
+      URL.revokeObjectURL(this.previewUrl);
+    }
+
+    this.previewUrl = URL.createObjectURL(this.bestCaptureBlob);
+    this.countdownProgress = 1;
   }
 
   private async assessCapturedBlob(blob: Blob): Promise<FaceQualityResult | null> {
@@ -521,7 +597,6 @@ export class SimFaceCapture extends LitElement {
   private handleEmbeddedRetake() {
     this.capturedBlob = null;
     this.qualityResult = null;
-    this.stableFrameCount = 0;
     this.captureState = 'live';
 
     if (this.previewUrl) {
@@ -531,6 +606,7 @@ export class SimFaceCapture extends LitElement {
 
     this.feedbackMessage = 'Ready to capture again.';
     this.feedbackTone = 'neutral';
+    this.resetCountdown();
     this.resumeEmbeddedVideo();
     this.scheduleEmbeddedAnalysis();
   }
@@ -581,7 +657,7 @@ export class SimFaceCapture extends LitElement {
 
     this.analysisInFlight = false;
     this.lastAnalysisTimestamp = 0;
-    this.stableFrameCount = 0;
+    this.resetCountdown();
   }
 
   private resetEmbeddedState() {
@@ -594,6 +670,7 @@ export class SimFaceCapture extends LitElement {
     this.errorMessage = '';
     this.feedbackMessage = 'Start a capture to see camera guidance here.';
     this.feedbackTone = 'neutral';
+    this.countdownProgress = 0;
     this.qualityResult = null;
     this.capturedBlob = null;
   }
@@ -701,6 +778,37 @@ export class SimFaceCapture extends LitElement {
     void video.play().catch(() => {
       // Ignore replay failures here; the initial preview startup path already errors loudly.
     });
+  }
+
+  private resetCountdown() {
+    this.countdownStartedAt = null;
+    this.countdownProgress = 0;
+    this.bestCaptureBlob = null;
+    this.bestCaptureScore = -1;
+    this.bestQualityResult = null;
+  }
+
+  private countdownMessage(timestamp: number, qualityResult: FaceQualityResult) {
+    if (this.countdownStartedAt === null) {
+      return 'Center your face in the oval. We will capture automatically when framing looks good.';
+    }
+
+    const remainingMs = Math.max(AUTO_CAPTURE_COUNTDOWN_MS - (timestamp - this.countdownStartedAt), 0);
+    const remainingSeconds = Math.max(Math.ceil(remainingMs / 1000), 0);
+    if (qualityResult.passesQualityChecks) {
+      return `Hold steady. Capturing the best frame in ${remainingSeconds}s.`;
+    }
+
+    return `${qualityResult.message} Best frame selection finishes in ${remainingSeconds}s.`;
+  }
+
+  private bestCaptureMessage() {
+    const score = this.bestQualityResult?.captureScore;
+    if (typeof score === 'number' && score > 0) {
+      return `Best frame captured. Review and confirm this photo.`;
+    }
+
+    return 'Capture complete. Review and confirm this photo.';
   }
 }
 

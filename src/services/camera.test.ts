@@ -283,6 +283,7 @@ function createQualityResult(
     hasFace: true,
     faceCount: 1,
     confidence: 0.95,
+    captureScore: 0.92,
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',

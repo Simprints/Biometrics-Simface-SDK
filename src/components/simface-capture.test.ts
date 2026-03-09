@@ -117,20 +117,21 @@ describe('<simface-capture>', () => {
     video.dispatchEvent(new Event('loadedmetadata'));
     await flushMicrotasks();
 
-    for (const timestamp of [200, 400, 600]) {
-      const callback = animationFrames.shift();
-      if (!callback) {
-        throw new Error('Expected an animation frame callback.');
+      for (const timestamp of [200, 5400]) {
+        const callback = animationFrames.shift();
+        if (!callback) {
+          throw new Error('Expected an animation frame callback.');
       }
 
       callback(timestamp);
       await flushMicrotasks();
     }
 
-    const confirmButton = [...(element.shadowRoot?.querySelectorAll('button') ?? [])]
+      const confirmButton = [...(element.shadowRoot?.querySelectorAll('button') ?? [])]
       .find((button) => button.textContent?.includes('Use this capture')) as HTMLButtonElement | undefined;
 
     expect(confirmButton).toBeDefined();
+    expect(element.shadowRoot?.textContent).toContain('Best frame captured. Review and confirm this photo.');
     confirmButton?.click();
     await flushMicrotasks();
 
@@ -154,6 +155,7 @@ function createQualityResult(
     hasFace: true,
     faceCount: 1,
     confidence: 0.95,
+    captureScore: 0.92,
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',
