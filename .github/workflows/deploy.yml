@@ -50,4 +50,6 @@ jobs:
             dist/simface-sdk.umd.cjs
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --access public
+        env:
+          NPM_CONFIG_PROVENANCE: false
