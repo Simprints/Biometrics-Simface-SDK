@@ -1,6 +1,7 @@
 {
   "name": "@simprints/simface-sdk",
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "simprints:releaseMajorVersion": "0",
   "description": "SimFace facial recognition SDK for web-based KYC workflows",
   "type": "module",
   "main": "dist/simface-sdk.umd.cjs",
