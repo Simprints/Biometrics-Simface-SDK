@@ -6,13 +6,23 @@
  */
 
 import { assessFaceQuality, assessFaceQualityForVideo, getVideoDetector } from './face-detection.js';
+import {
+  AUTO_CAPTURE_ANALYSIS_INTERVAL_MS,
+  AUTO_CAPTURE_COUNTDOWN_MS,
+  CAPTURE_GUIDE_MASK_PATH,
+  CAPTURE_GUIDE_PATH,
+  autoCaptureCompleteMessage,
+  autoCaptureCountdownMessage,
+} from '../shared/auto-capture.js';
 import type { FaceQualityResult } from '../types/index.js';
 
 const CAPTURE_DIALOG_Z_INDEX = '2147483647';
-const AUTO_CAPTURE_ANALYSIS_INTERVAL_MS = 180;
-const AUTO_CAPTURE_STABLE_FRAMES = 3;
 
 type CaptureMode = 'auto' | 'manual';
+type GuideOverlayControls = {
+  wrapper: HTMLDivElement;
+  setProgress: (value: number) => void;
+};
 
 /**
  * Opens the device camera and returns a confirmed image Blob, or null if cancelled.
@@ -81,10 +91,21 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
     let animationFrameId: number | null = null;
     let escapeHandler: ((event: KeyboardEvent) => void) | null = null;
     let lastAnalysisTimestamp = 0;
-    let stableFrameCount = 0;
     let analysisInFlight = false;
     let previewActive = false;
     let videoReady = false;
+    let countdownStartedAt: number | null = null;
+    let bestCaptureBlob: Blob | null = null;
+    let bestCaptureScore = -1;
+    let bestQualityResult: FaceQualityResult | null = null;
+
+    const resetAutoCaptureState = (guideOverlay: GuideOverlayControls) => {
+      countdownStartedAt = null;
+      bestCaptureBlob = null;
+      bestCaptureScore = -1;
+      bestQualityResult = null;
+      guideOverlay.setProgress(0);
+    };
 
     const cleanup = () => {
       if (animationFrameId !== null) {
@@ -128,23 +149,24 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       actions: HTMLDivElement,
       cancelButton: HTMLButtonElement,
       captureButton: HTMLButtonElement,
+      guideOverlay: GuideOverlayControls,
     ) => {
       previewActive = false;
-      stableFrameCount = 0;
+      resetAutoCaptureState(guideOverlay);
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
         previewUrl = '';
       }
       previewBlob = null;
 
-      mediaContainer.replaceChildren(video, createGuideOverlay());
+      mediaContainer.replaceChildren(video, guideOverlay.wrapper);
       if (videoReady) {
         resumeVideoPreview(video);
       }
       title.textContent = mode === 'auto' ? 'Center your face' : 'Take a face photo';
       copy.textContent =
         mode === 'auto'
-          ? 'Keep your face inside the oval. We will capture automatically when the framing looks good.'
+          ? 'Keep your face inside the oval. We will start a short countdown when the framing looks good and keep the best frame.'
           : 'Line up your face in the oval, then take a photo manually.';
 
       feedback.textContent =
@@ -170,9 +192,14 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       retakeButton: HTMLButtonElement,
       blob: Blob,
       qualityResult: FaceQualityResult | null,
+      options?: {
+        copyText?: string;
+        feedbackText?: string;
+        feedbackState?: 'neutral' | 'success' | 'error' | 'manual';
+      },
     ) => {
       previewActive = true;
-      stableFrameCount = 0;
+      countdownStartedAt = null;
 
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
@@ -196,18 +223,23 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       mediaContainer.replaceChildren(video, image);
       title.textContent = 'Review your photo';
       copy.textContent =
-        qualityResult?.passesQualityChecks === false
-          ? 'The capture did not pass the checks. Retake the photo.'
-          : 'Confirm this photo or retake it.';
+        options?.copyText
+          ?? (qualityResult?.passesQualityChecks === false
+            ? 'The capture did not pass the checks. Retake the photo.'
+            : 'Confirm this photo or retake it.');
 
-      feedback.textContent = qualityResult?.message ?? 'Review the captured image before continuing.';
+      feedback.textContent =
+        options?.feedbackText
+          ?? qualityResult?.message
+          ?? 'Review the captured image before continuing.';
       setFeedbackState(
         feedback,
-        qualityResult
-          ? qualityResult.passesQualityChecks
-            ? 'success'
-            : 'error'
-          : 'manual',
+        options?.feedbackState
+          ?? (qualityResult
+            ? qualityResult.passesQualityChecks
+              ? 'success'
+              : 'error'
+            : 'manual'),
       );
 
       actions.replaceChildren(cancelButton, retakeButton);
@@ -305,6 +337,7 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       captureButton.dataset.simfaceAction = 'capture';
       captureButton.style.display = mode === 'manual' ? 'inline-flex' : 'none';
       captureButton.disabled = true;
+      const guideOverlay = createGuideOverlay();
 
       const confirmButton = createActionButton('Use photo', 'primary');
       confirmButton.dataset.simfaceAction = 'confirm';
@@ -316,7 +349,17 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       overlay.append(panel);
       document.body.appendChild(overlay);
 
-      renderCaptureMode(video, mediaContainer, title, copy, feedback, actions, cancelButton, captureButton);
+      renderCaptureMode(
+        video,
+        mediaContainer,
+        title,
+        copy,
+        feedback,
+        actions,
+        cancelButton,
+        captureButton,
+        guideOverlay,
+      );
 
       escapeHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
@@ -336,7 +379,17 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       });
 
       retakeButton.addEventListener('click', () => {
-        renderCaptureMode(video, mediaContainer, title, copy, feedback, actions, cancelButton, captureButton);
+        renderCaptureMode(
+          video,
+          mediaContainer,
+          title,
+          copy,
+          feedback,
+          actions,
+          cancelButton,
+          captureButton,
+          guideOverlay,
+        );
         if (mode === 'manual' && videoReady) {
           captureButton.disabled = false;
         }
@@ -407,35 +460,78 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
 
           try {
             const qualityResult = await assessFaceQualityForVideo(video, timestamp);
-            feedback.textContent = qualityResult.message;
-            setFeedbackState(feedback, qualityResult.passesQualityChecks ? 'success' : 'neutral');
 
             if (qualityResult.passesQualityChecks) {
-              stableFrameCount += 1;
-            } else {
-              stableFrameCount = 0;
+              if (countdownStartedAt === null) {
+                countdownStartedAt = timestamp;
+              }
+
+              if (qualityResult.captureScore > bestCaptureScore) {
+                bestCaptureBlob = await captureVideoFrame(video);
+                bestCaptureScore = qualityResult.captureScore;
+                bestQualityResult = qualityResult;
+              }
             }
 
-            if (stableFrameCount >= AUTO_CAPTURE_STABLE_FRAMES) {
-              const blob = await captureVideoFrame(video);
-              renderPreviewMode(
-                video,
-                mediaContainer,
-                title,
-                copy,
-                feedback,
-                actions,
-                cancelButton,
-                confirmButton,
-                retakeButton,
-                blob,
+            if (countdownStartedAt !== null) {
+              const countdownProgress = Math.min(
+                (timestamp - countdownStartedAt) / AUTO_CAPTURE_COUNTDOWN_MS,
+                1,
+              );
+              guideOverlay.setProgress(countdownProgress);
+              feedback.textContent = autoCaptureCountdownMessage(
+                timestamp,
+                countdownStartedAt,
                 qualityResult,
               );
-              return;
+              setFeedbackState(feedback, qualityResult.passesQualityChecks ? 'success' : 'neutral');
+
+              if (countdownProgress >= 1) {
+                const blob = bestCaptureBlob ?? await captureVideoFrame(video);
+                const previewQualityResult =
+                  bestCaptureBlob && bestQualityResult
+                    ? bestQualityResult
+                    : await assessCapturedBlobSafely(blob);
+
+                renderPreviewMode(
+                  video,
+                  mediaContainer,
+                  title,
+                  copy,
+                  feedback,
+                  actions,
+                  cancelButton,
+                  confirmButton,
+                  retakeButton,
+                  blob,
+                  previewQualityResult,
+                  {
+                    copyText: 'Best frame captured. Review and confirm this photo.',
+                    feedbackText: autoCaptureCompleteMessage(previewQualityResult),
+                    feedbackState: previewQualityResult?.passesQualityChecks === false ? 'error' : 'success',
+                  },
+                );
+                return;
+              }
+            } else {
+              guideOverlay.setProgress(0);
+              feedback.textContent = qualityResult.message;
+              setFeedbackState(feedback, qualityResult.passesQualityChecks ? 'success' : 'neutral');
             }
+
           } catch (error) {
             mode = 'manual';
-            renderCaptureMode(video, mediaContainer, title, copy, feedback, actions, cancelButton, captureButton);
+            renderCaptureMode(
+              video,
+              mediaContainer,
+              title,
+              copy,
+              feedback,
+              actions,
+              cancelButton,
+              captureButton,
+              guideOverlay,
+            );
             captureButton.disabled = false;
             feedback.textContent = 'Automatic capture is unavailable in this browser. Use Take photo instead.';
             setFeedbackState(feedback, 'manual');
@@ -584,7 +680,7 @@ function createActionButton(label: string, variant: 'primary' | 'secondary'): HT
   return button;
 }
 
-function createGuideOverlay(): HTMLDivElement {
+function createGuideOverlay(): GuideOverlayControls {
   const wrapper = document.createElement('div');
   applyStyles(wrapper, {
     position: 'absolute',
@@ -592,21 +688,56 @@ function createGuideOverlay(): HTMLDivElement {
     pointerEvents: 'none',
   });
 
-  const guide = document.createElement('div');
-  applyStyles(guide, {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    width: '64%',
-    height: '76%',
-    transform: 'translate(-50%, -50%)',
-    borderRadius: '999px',
-    border: '3px solid rgba(255, 255, 255, 0.9)',
-    boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.34)',
+  const svg = createSvgElement('svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  applyStyles(svg, {
+    width: '100%',
+    height: '100%',
+    display: 'block',
   });
 
-  wrapper.append(guide);
-  return wrapper;
+  const mask = createSvgElement('path');
+  mask.setAttribute('d', CAPTURE_GUIDE_MASK_PATH);
+  mask.setAttribute('fill', 'rgba(51, 65, 85, 0.75)');
+  mask.setAttribute('fill-rule', 'evenodd');
+
+  const outline = createSvgElement('path');
+  outline.setAttribute('d', CAPTURE_GUIDE_PATH);
+  outline.setAttribute('fill', 'none');
+  outline.setAttribute('stroke', 'rgba(255, 255, 255, 0.92)');
+  outline.setAttribute('stroke-width', '2.8');
+  outline.setAttribute('stroke-linecap', 'round');
+  outline.setAttribute('stroke-linejoin', 'round');
+
+  const progress = createSvgElement('path');
+  progress.setAttribute('d', CAPTURE_GUIDE_PATH);
+  progress.setAttribute('fill', 'none');
+  progress.setAttribute('stroke', '#22c55e');
+  progress.setAttribute('stroke-width', '2.8');
+  progress.setAttribute('stroke-linecap', 'round');
+  progress.setAttribute('stroke-linejoin', 'round');
+  progress.setAttribute('pathLength', '100');
+  progress.setAttribute('stroke-dasharray', '100');
+  progress.setAttribute('stroke-dashoffset', '100');
+  progress.style.transition = 'stroke-dashoffset 0.14s linear, opacity 0.14s linear';
+  progress.style.opacity = '0';
+
+  svg.append(mask, outline, progress);
+  wrapper.append(svg);
+
+  return {
+    wrapper,
+    setProgress(value: number) {
+      const progressValue = Math.min(Math.max(value, 0), 1);
+      progress.setAttribute('stroke-dashoffset', `${100 - progressValue * 100}`);
+      progress.style.opacity = progressValue > 0 ? '1' : '0';
+    },
+  };
+}
+
+function createSvgElement<K extends keyof SVGElementTagNameMap>(tagName: K): SVGElementTagNameMap[K] {
+  return document.createElementNS('http://www.w3.org/2000/svg', tagName);
 }
 
 function setFeedbackState(
@@ -640,7 +771,7 @@ function setFeedbackState(
   }
 }
 
-function applyStyles(element: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
+function applyStyles(element: HTMLElement | SVGElement, styles: Partial<CSSStyleDeclaration>) {
   Object.assign(element.style, styles);
 }
 

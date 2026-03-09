@@ -2,15 +2,18 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { blobToImage, captureFromCamera } from '../services/camera.js';
 import { assessFaceQuality, assessFaceQualityForVideo } from '../services/face-detection.js';
+import {
+  AUTO_CAPTURE_ANALYSIS_INTERVAL_MS,
+  AUTO_CAPTURE_COUNTDOWN_MS,
+  CAPTURE_GUIDE_MASK_PATH,
+  CAPTURE_GUIDE_PATH,
+  autoCaptureCompleteMessage,
+  autoCaptureCountdownMessage,
+} from '../shared/auto-capture.js';
 import type { FaceQualityResult } from '../types/index.js';
 
 type CaptureState = 'idle' | 'starting' | 'live' | 'preview' | 'error';
 type FeedbackTone = 'neutral' | 'success' | 'error';
-
-const AUTO_CAPTURE_ANALYSIS_INTERVAL_MS = 180;
-const AUTO_CAPTURE_COUNTDOWN_MS = 5000;
-const GUIDE_PATH = 'M 50 17 C 60 17 68 19.5 74 25 C 79 29.5 81.5 36.5 81.5 46.5 V 54.5 C 81.5 63.5 78.5 71 71.5 76.5 C 65 81.5 57.5 84 50 84 C 42.5 84 35 81.5 28.5 76.5 C 21.5 71 18.5 63.5 18.5 54.5 V 46.5 C 18.5 36.5 21 29.5 26 25 C 32 19.5 40 17 50 17 Z';
-const GUIDE_MASK_PATH = `M 0 0 H 100 V 100 H 0 Z ${GUIDE_PATH}`;
 
 /**
  * <simface-capture> — Web Component for capturing and quality-checking face images.
@@ -340,9 +343,9 @@ export class SimFaceCapture extends LitElement {
                 style=${`--capture-progress:${this.countdownProgress};`}
               >
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  <path class="guide-mask" d=${GUIDE_MASK_PATH}></path>
-                  <path class="ring-outline" d=${GUIDE_PATH}></path>
-                  <path class="ring-progress" d=${GUIDE_PATH} pathLength="100"></path>
+                  <path class="guide-mask" d=${CAPTURE_GUIDE_MASK_PATH}></path>
+                  <path class="ring-outline" d=${CAPTURE_GUIDE_PATH}></path>
+                  <path class="ring-progress" d=${CAPTURE_GUIDE_PATH} pathLength="100"></path>
                 </svg>
               </div>
             </div>
@@ -496,7 +499,11 @@ export class SimFaceCapture extends LitElement {
 
         if (this.countdownStartedAt !== null) {
           this.countdownProgress = Math.min((timestamp - this.countdownStartedAt) / AUTO_CAPTURE_COUNTDOWN_MS, 1);
-          this.feedbackMessage = this.countdownMessage(timestamp, qualityResult);
+          this.feedbackMessage = autoCaptureCountdownMessage(
+            timestamp,
+            this.countdownStartedAt,
+            qualityResult,
+          );
           this.feedbackTone = qualityResult.passesQualityChecks ? 'success' : 'neutral';
 
           if (this.countdownProgress >= 1) {
@@ -570,7 +577,7 @@ export class SimFaceCapture extends LitElement {
     this.capturedBlob = this.bestCaptureBlob;
     this.qualityResult = this.bestQualityResult;
     this.captureState = 'preview';
-    this.feedbackMessage = this.bestCaptureMessage();
+    this.feedbackMessage = autoCaptureCompleteMessage(this.bestQualityResult);
     this.feedbackTone = 'success';
 
     if (this.previewUrl) {
@@ -788,28 +795,6 @@ export class SimFaceCapture extends LitElement {
     this.bestQualityResult = null;
   }
 
-  private countdownMessage(timestamp: number, qualityResult: FaceQualityResult) {
-    if (this.countdownStartedAt === null) {
-      return 'Center your face in the oval. We will capture automatically when framing looks good.';
-    }
-
-    const remainingMs = Math.max(AUTO_CAPTURE_COUNTDOWN_MS - (timestamp - this.countdownStartedAt), 0);
-    const remainingSeconds = Math.max(Math.ceil(remainingMs / 1000), 0);
-    if (qualityResult.passesQualityChecks) {
-      return `Hold steady. Capturing the best frame in ${remainingSeconds}s.`;
-    }
-
-    return `${qualityResult.message} Best frame selection finishes in ${remainingSeconds}s.`;
-  }
-
-  private bestCaptureMessage() {
-    const score = this.bestQualityResult?.captureScore;
-    if (typeof score === 'number' && score > 0) {
-      return `Best frame captured. Review and confirm this photo.`;
-    }
-
-    return 'Capture complete. Review and confirm this photo.';
-  }
 }
 
 declare global {
