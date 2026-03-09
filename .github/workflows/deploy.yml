@@ -1,32 +1,56 @@
 name: Deploy
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   test:
     name: Run Tests
     uses: ./.github/workflows/test.yml
 
-  build-frontend:
-    name: Build Frontend SDK
+  build-and-publish:
+    name: Build, Release & Publish
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Compute version
+        id: version
+        run: |
+          MAJOR=$(node -p "require('./package.json')['simprints:releaseMajorVersion']")
+          VERSION="${MAJOR}.${{ github.run_number }}.${{ github.run_attempt }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set package version
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
       - name: Install and build
         run: |
           npm install
           npm run build
 
-      - name: Upload SDK artifact
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: simface-sdk
-          path: dist/
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/simface-sdk.js
+            dist/simface-sdk.umd.cjs
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NPM_CONFIG_PROVENANCE: false

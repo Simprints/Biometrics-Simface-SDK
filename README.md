@@ -14,12 +14,7 @@ In standard browsers, the SDK uses an in-page camera flow powered by `getUserMed
 
 ### 1. Include the SDK
 
-Via CDN:
-```html
-<script type="module" src="https://your-cdn.com/simface-sdk.js"></script>
-```
-
-Via npm or a private registry after publishing the package:
+**Option A — npm:**
 ```bash
 npm install @simprints/simface-sdk
 ```
@@ -27,17 +22,16 @@ npm install @simprints/simface-sdk
 import { enroll, verify } from '@simprints/simface-sdk';
 ```
 
-From this repository:
-```bash
-npm install
-npm run build
+**Option B — direct script include:**
+
+Download the SDK files from the [latest GitHub Release](../../releases/latest) and include them directly:
+```html
+<script type="module" src="simface-sdk.js"></script>
 ```
 
-Then publish or serve the generated files from `dist/`.
-The generated library files are:
-
-- `dist/simface-sdk.js` (ES module)
-- `dist/simface-sdk.umd.cjs` (UMD/CommonJS build)
+The release contains two builds:
+- `simface-sdk.js` (ES module)
+- `simface-sdk.umd.cjs` (UMD/CommonJS build)
 
 ### 2. Configure
 

@@ -1,0 +1,174 @@
+import type { FaceFeedbackCode, FaceQualityResult } from '../types/index.js';
+
+export interface FaceBoundingBox {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+}
+
+export interface FaceKeypoint {
+  x: number;
+  y: number;
+}
+
+export interface FaceDetectionSnapshot {
+  boundingBox?: FaceBoundingBox;
+  confidence: number;
+  keypoints: FaceKeypoint[];
+}
+
+interface FaceQualityInput {
+  width: number;
+  height: number;
+  detections: FaceDetectionSnapshot[];
+}
+
+const MIN_FACE_AREA_RATIO = 0.1;
+const MAX_FACE_AREA_RATIO = 0.42;
+const CENTER_TOLERANCE_X = 0.14;
+const CENTER_TOLERANCE_Y = 0.18;
+const MAX_NOSE_OFFSET_RATIO = 0.12;
+
+const KEYPOINT_RIGHT_EYE = 0;
+const KEYPOINT_LEFT_EYE = 1;
+const KEYPOINT_NOSE = 2;
+
+export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult {
+  const { detections, width, height } = input;
+
+  if (detections.length === 0) {
+    return createQualityResult({
+      hasFace: false,
+      faceCount: 0,
+      confidence: 0,
+      isCentered: false,
+      passesQualityChecks: false,
+      feedback: 'no-face',
+      message: 'No face detected. Center your face in the oval and look at the camera.',
+    });
+  }
+
+  if (detections.length > 1) {
+    return createQualityResult({
+      hasFace: true,
+      faceCount: detections.length,
+      confidence: detections[0]?.confidence ?? 0,
+      isCentered: false,
+      passesQualityChecks: false,
+      feedback: 'multiple-faces',
+      message: 'Multiple faces detected. Make sure only one person is in view.',
+    });
+  }
+
+  const detection = detections[0];
+  const bbox = detection.boundingBox;
+
+  if (!bbox) {
+    return createQualityResult({
+      hasFace: true,
+      faceCount: 1,
+      confidence: detection.confidence,
+      isCentered: false,
+      passesQualityChecks: false,
+      feedback: 'face-unclear',
+      message: 'Face detected, but the frame is unclear. Hold still and try again.',
+    });
+  }
+
+  const faceAreaRatio = (bbox.width * bbox.height) / (width * height);
+  if (faceAreaRatio < MIN_FACE_AREA_RATIO) {
+    return createFrameAdjustmentResult(detection.confidence, 'too-far', 'Move closer to the camera.');
+  }
+
+  if (faceAreaRatio > MAX_FACE_AREA_RATIO) {
+    return createFrameAdjustmentResult(detection.confidence, 'too-close', 'Move slightly farther away.');
+  }
+
+  const faceCenterX = (bbox.originX + bbox.width / 2) / width;
+  const faceCenterY = (bbox.originY + bbox.height / 2) / height;
+
+  if (faceCenterX < 0.5 - CENTER_TOLERANCE_X) {
+    return createFrameAdjustmentResult(detection.confidence, 'move-right', 'Move your face a little to the right.');
+  }
+
+  if (faceCenterX > 0.5 + CENTER_TOLERANCE_X) {
+    return createFrameAdjustmentResult(detection.confidence, 'move-left', 'Move your face a little to the left.');
+  }
+
+  if (faceCenterY < 0.5 - CENTER_TOLERANCE_Y) {
+    return createFrameAdjustmentResult(detection.confidence, 'move-down', 'Move your face slightly down.');
+  }
+
+  if (faceCenterY > 0.5 + CENTER_TOLERANCE_Y) {
+    return createFrameAdjustmentResult(detection.confidence, 'move-up', 'Move your face slightly up.');
+  }
+
+  const turnFeedback = detectTurnFeedback(detection.keypoints);
+  if (turnFeedback) {
+    return createFrameAdjustmentResult(detection.confidence, turnFeedback.feedback, turnFeedback.message);
+  }
+
+  return createQualityResult({
+    hasFace: true,
+    faceCount: 1,
+    confidence: detection.confidence,
+    isCentered: true,
+    passesQualityChecks: true,
+    feedback: 'good',
+    message: 'Hold still. Capturing automatically...',
+  });
+}
+
+function detectTurnFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedbackCode; message: string } | null {
+  const rightEye = keypoints[KEYPOINT_RIGHT_EYE];
+  const leftEye = keypoints[KEYPOINT_LEFT_EYE];
+  const nose = keypoints[KEYPOINT_NOSE];
+
+  if (!rightEye || !leftEye || !nose) {
+    return null;
+  }
+
+  const eyeMidpointX = (rightEye.x + leftEye.x) / 2;
+  const eyeDistance = Math.abs(leftEye.x - rightEye.x);
+  if (eyeDistance === 0) {
+    return null;
+  }
+
+  const noseOffsetRatio = (nose.x - eyeMidpointX) / eyeDistance;
+  if (noseOffsetRatio <= -MAX_NOSE_OFFSET_RATIO) {
+    return {
+      feedback: 'turn-right',
+      message: 'Turn slightly right so your face points at the camera.',
+    };
+  }
+
+  if (noseOffsetRatio >= MAX_NOSE_OFFSET_RATIO) {
+    return {
+      feedback: 'turn-left',
+      message: 'Turn slightly left so your face points at the camera.',
+    };
+  }
+
+  return null;
+}
+
+function createFrameAdjustmentResult(
+  confidence: number,
+  feedback: FaceFeedbackCode,
+  message: string,
+): FaceQualityResult {
+  return createQualityResult({
+    hasFace: true,
+    faceCount: 1,
+    confidence,
+    isCentered: false,
+    passesQualityChecks: false,
+    feedback,
+    message,
+  });
+}
+
+function createQualityResult(result: FaceQualityResult): FaceQualityResult {
+  return result;
+}
