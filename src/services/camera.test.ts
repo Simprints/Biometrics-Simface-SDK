@@ -51,7 +51,7 @@ describe('camera service', () => {
   });
 
   describe('captureFromCamera', () => {
-    it('auto-captures and confirms a face photo when realtime guidance is supported', async () => {
+    it('counts down from the first good frame and confirms the best auto-captured popup frame', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
 
       const stop = vi.fn();
@@ -61,11 +61,28 @@ describe('camera service', () => {
 
       setMediaDevices({ getUserMedia } as MediaDevices);
       faceDetectionMocks.getVideoDetector.mockResolvedValue({});
-      faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult({
-        passesQualityChecks: true,
-        message: 'Hold still. Capturing automatically...',
-        feedback: 'good',
-      }));
+      faceDetectionMocks.assessFaceQualityForVideo
+        .mockResolvedValueOnce(createQualityResult({
+          captureScore: 0.78,
+          message: 'Face looks good.',
+        }))
+        .mockResolvedValueOnce(createQualityResult({
+          captureScore: 0.94,
+          message: 'Face looks great.',
+        }))
+        .mockResolvedValueOnce(createQualityResult({
+          captureScore: 0.12,
+          passesQualityChecks: false,
+          feedback: 'move-left',
+          message: 'Move a little left.',
+        }));
+
+      const firstBlob = new Blob(['first auto frame'], { type: 'image/jpeg' });
+      const secondBlob = new Blob(['second auto frame'], { type: 'image/jpeg' });
+      const toBlob = vi.fn<Parameters<HTMLCanvasElement['toBlob']>, ReturnType<HTMLCanvasElement['toBlob']>>((callback: BlobCallback) => {
+        callback(toBlob.mock.calls.length === 1 ? firstBlob : secondBlob);
+      });
+      HTMLCanvasElement.prototype.toBlob = toBlob;
 
       const animationFrames: FrameRequestCallback[] = [];
       window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -88,7 +105,7 @@ describe('camera service', () => {
       video.dispatchEvent(new Event('loadedmetadata'));
       await flushMicrotasks();
 
-      for (const timestamp of [200, 400, 600]) {
+      for (const timestamp of [200, 2200, 5400]) {
         const callback = animationFrames.shift();
         if (!callback) {
           throw new Error('Expected an animation frame callback.');
@@ -100,12 +117,14 @@ describe('camera service', () => {
 
       const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
       expect(confirmButton).not.toBeNull();
+      expect(document.body.textContent).toContain('Best frame captured. Review and confirm this photo.');
       confirmButton?.dispatchEvent(new MouseEvent('click'));
 
       const result = await capturePromise;
 
-      expect(result).toBeInstanceOf(Blob);
+      expect(result).toBe(secondBlob);
       expect(faceDetectionMocks.assessFaceQualityForVideo).toHaveBeenCalledTimes(3);
+      expect(toBlob).toHaveBeenCalledTimes(2);
       expect(getUserMedia).toHaveBeenCalledWith({
         video: { facingMode: { ideal: 'user' } },
         audio: false,
