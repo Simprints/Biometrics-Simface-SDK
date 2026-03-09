@@ -9,7 +9,7 @@ type FeedbackTone = 'neutral' | 'success' | 'error';
 
 const AUTO_CAPTURE_ANALYSIS_INTERVAL_MS = 180;
 const AUTO_CAPTURE_COUNTDOWN_MS = 5000;
-const GUIDE_PATH = 'M 50 10 H 64 A 18 18 0 0 1 82 28 V 72 A 18 18 0 0 1 64 90 H 36 A 18 18 0 0 1 18 72 V 28 A 18 18 0 0 1 36 10 H 50 Z';
+const GUIDE_PATH = 'M 50 8 C 60 8 68 11 74 18 C 79 24 81.5 33 81.5 46 V 57 C 81.5 69 78.5 79 71.5 86 C 65 92.5 57.5 95.5 50 95.5 C 42.5 95.5 35 92.5 28.5 86 C 21.5 79 18.5 69 18.5 57 V 46 C 18.5 33 21 24 26 18 C 32 11 40 8 50 8 Z';
 const GUIDE_MASK_PATH = `M 0 0 H 100 V 100 H 0 Z ${GUIDE_PATH}`;
 
 /**
@@ -120,7 +120,7 @@ export class SimFaceCapture extends LitElement {
     }
 
     .guide-mask {
-      fill: rgba(148, 163, 184, 0.275);
+      fill: rgba(51, 65, 85, 0.75);
       fill-rule: evenodd;
     }
 
