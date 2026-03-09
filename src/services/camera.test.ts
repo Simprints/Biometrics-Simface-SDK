@@ -155,6 +155,70 @@ describe('camera service', () => {
       expect(stop).toHaveBeenCalled();
     });
 
+    it('retake replaces the previous preview and confirms the new capture', async () => {
+      setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
+
+      const stop = vi.fn();
+      const getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      } as unknown as MediaStream);
+
+      setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
+      faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
+
+      const firstBlob = new Blob(['first image'], { type: 'image/jpeg' });
+      const secondBlob = new Blob(['second image'], { type: 'image/jpeg' });
+      const toBlob = vi.fn<Parameters<HTMLCanvasElement['toBlob']>, ReturnType<HTMLCanvasElement['toBlob']>>((callback: BlobCallback) => {
+        callback(toBlob.mock.calls.length === 1 ? firstBlob : secondBlob);
+      });
+      HTMLCanvasElement.prototype.toBlob = toBlob;
+
+      const capturePromise = captureFromCamera();
+      await flushMicrotasks();
+
+      const video = document.querySelector('video') as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      if (!video) {
+        throw new Error('Video element was not rendered.');
+      }
+
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks();
+
+      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      expect(captureButton).not.toBeNull();
+
+      captureButton?.dispatchEvent(new MouseEvent('click'));
+      await flushMicrotasks();
+
+      const previewImage = document.querySelector('img[alt="Captured face preview"]') as HTMLImageElement | null;
+      expect(previewImage).not.toBeNull();
+      expect(document.querySelector('video')).toBe(video);
+
+      const retakeButton = document.querySelector('[data-simface-action="retake"]') as HTMLButtonElement | null;
+      expect(retakeButton).not.toBeNull();
+      retakeButton?.dispatchEvent(new MouseEvent('click'));
+      await flushMicrotasks();
+
+      expect(document.querySelector('img[alt="Captured face preview"]')).toBeNull();
+      expect(document.querySelector('video')).toBe(video);
+
+      captureButton?.dispatchEvent(new MouseEvent('click'));
+      await flushMicrotasks();
+
+      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      expect(confirmButton).not.toBeNull();
+      confirmButton?.dispatchEvent(new MouseEvent('click'));
+
+      const result = await capturePromise;
+      expect(result).toBe(secondBlob);
+      expect(toBlob).toHaveBeenCalledTimes(2);
+      expect(stop).toHaveBeenCalled();
+    });
+
     it('falls back to file input capture in WhatsApp', async () => {
       setUserAgent('Mozilla/5.0 WhatsApp/2.24.0');
 

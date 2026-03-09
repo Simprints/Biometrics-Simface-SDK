@@ -138,6 +138,9 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       previewBlob = null;
 
       mediaContainer.replaceChildren(video, createGuideOverlay());
+      if (videoReady) {
+        resumeVideoPreview(video);
+      }
       title.textContent = mode === 'auto' ? 'Center your face' : 'Take a face photo';
       copy.textContent =
         mode === 'auto'
@@ -156,6 +159,7 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
     };
 
     const renderPreviewMode = (
+      video: HTMLVideoElement,
       mediaContainer: HTMLDivElement,
       title: HTMLHeadingElement,
       copy: HTMLParagraphElement,
@@ -181,12 +185,15 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       image.alt = 'Captured face preview';
       image.src = previewUrl;
       applyStyles(image, {
+        position: 'absolute',
+        inset: '0',
+        zIndex: '1',
         width: '100%',
         height: '100%',
         objectFit: 'cover',
       });
 
-      mediaContainer.replaceChildren(image);
+      mediaContainer.replaceChildren(video, image);
       title.textContent = 'Review your photo';
       copy.textContent =
         qualityResult?.passesQualityChecks === false
@@ -347,6 +354,7 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
           const blob = await captureVideoFrame(video);
           const qualityResult = await assessCapturedBlobSafely(blob);
           renderPreviewMode(
+            video,
             mediaContainer,
             title,
             copy,
@@ -411,6 +419,7 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
             if (stableFrameCount >= AUTO_CAPTURE_STABLE_FRAMES) {
               const blob = await captureVideoFrame(video);
               renderPreviewMode(
+                video,
                 mediaContainer,
                 title,
                 copy,
@@ -536,6 +545,12 @@ function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
 
       resolve(blob);
     }, 'image/jpeg', 0.92);
+  });
+}
+
+function resumeVideoPreview(video: HTMLVideoElement) {
+  void video.play().catch(() => {
+    // Ignore resume failures here; capture flow already handles preview startup errors.
   });
 }
 
