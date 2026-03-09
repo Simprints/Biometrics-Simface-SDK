@@ -26,6 +26,7 @@ interface FaceQualityInput {
 
 const MIN_FACE_AREA_RATIO = 0.1;
 const MAX_FACE_AREA_RATIO = 0.42;
+const IDEAL_FACE_AREA_RATIO = 0.24;
 const CENTER_TOLERANCE_X = 0.14;
 const CENTER_TOLERANCE_Y = 0.18;
 const MAX_NOSE_OFFSET_RATIO = 0.12;
@@ -42,6 +43,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       hasFace: false,
       faceCount: 0,
       confidence: 0,
+      captureScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'no-face',
@@ -54,6 +56,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       hasFace: true,
       faceCount: detections.length,
       confidence: detections[0]?.confidence ?? 0,
+      captureScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'multiple-faces',
@@ -69,6 +72,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       hasFace: true,
       faceCount: 1,
       confidence: detection.confidence,
+      captureScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'face-unclear',
@@ -113,6 +117,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
     hasFace: true,
     faceCount: 1,
     confidence: detection.confidence,
+    captureScore: calculateCaptureScore(detection.confidence, faceCenterX, faceCenterY, faceAreaRatio),
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',
@@ -162,6 +167,7 @@ function createFrameAdjustmentResult(
     hasFace: true,
     faceCount: 1,
     confidence,
+    captureScore: 0,
     isCentered: false,
     passesQualityChecks: false,
     feedback,
@@ -171,4 +177,23 @@ function createFrameAdjustmentResult(
 
 function createQualityResult(result: FaceQualityResult): FaceQualityResult {
   return result;
+}
+
+function calculateCaptureScore(
+  confidence: number,
+  faceCenterX: number,
+  faceCenterY: number,
+  faceAreaRatio: number,
+) {
+  const xPenalty = Math.abs(faceCenterX - 0.5) / CENTER_TOLERANCE_X;
+  const yPenalty = Math.abs(faceCenterY - 0.5) / CENTER_TOLERANCE_Y;
+  const centerScore = 1 - Math.min((xPenalty + yPenalty) / 2, 1);
+
+  const maxAreaDistance = Math.max(
+    Math.abs(IDEAL_FACE_AREA_RATIO - MIN_FACE_AREA_RATIO),
+    Math.abs(MAX_FACE_AREA_RATIO - IDEAL_FACE_AREA_RATIO),
+  );
+  const sizeScore = 1 - Math.min(Math.abs(faceAreaRatio - IDEAL_FACE_AREA_RATIO) / maxAreaDistance, 1);
+
+  return Number((confidence * 0.55 + centerScore * 0.3 + sizeScore * 0.15).toFixed(4));
 }

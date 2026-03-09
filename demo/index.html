@@ -66,11 +66,19 @@
           </div>
 
           <p id="status-copy" class="section-copy">
-            Click <strong>Enroll</strong> or <strong>Verify</strong> to open the SDK capture flow with the real backend.
+            Click <strong>Enroll</strong> or <strong>Verify</strong> to start the SDK capture component directly in the page.
           </p>
 
           <h3>Latest result</h3>
           <pre id="result-output" class="result-output">No action has been run yet.</pre>
+        </section>
+
+        <section class="card card-capture">
+          <h2>Inline SDK capture</h2>
+          <p class="section-copy">
+            The demo uses the SDK web component directly here instead of opening a separate capture popup.
+          </p>
+          <simface-capture id="inline-capture" embedded label="Choose Enroll or Verify to begin capture."></simface-capture>
         </section>
 
         <section class="card">
