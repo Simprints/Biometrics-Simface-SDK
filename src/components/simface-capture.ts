@@ -1,10 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { captureFromCamera, blobToImage, blobToDataURL } from '../services/camera.js';
-import { assessFaceQuality } from '../services/face-detection.js';
-import type { FaceQualityResult } from '../types/index.js';
+import { captureFromCamera } from '../services/camera.js';
 
-type CaptureState = 'idle' | 'capturing' | 'analyzing' | 'preview' | 'error';
+type CaptureState = 'idle' | 'capturing' | 'error';
 
 /**
  * <simface-capture> — Web Component for capturing and quality-checking face images.
@@ -19,11 +17,7 @@ export class SimFaceCapture extends LitElement {
   @property({ type: String }) label = 'Take a selfie';
 
   @state() private captureState: CaptureState = 'idle';
-  @state() private previewUrl = '';
-  @state() private qualityResult: FaceQualityResult | null = null;
   @state() private errorMessage = '';
-
-  private capturedBlob: Blob | null = null;
 
   static styles = css`
     :host {
@@ -39,12 +33,6 @@ export class SimFaceCapture extends LitElement {
       border: 1px solid #e0e0e0;
       border-radius: 12px;
       background: #fafafa;
-    }
-
-    .preview-img {
-      max-width: 100%;
-      border-radius: 8px;
-      margin: 12px 0;
     }
 
     .btn {
@@ -128,35 +116,6 @@ export class SimFaceCapture extends LitElement {
           <div class="spinner"></div>
         `;
 
-      case 'analyzing':
-        return html`
-          <p>Checking image quality...</p>
-          <div class="spinner"></div>
-        `;
-
-      case 'preview':
-        return html`
-          ${this.previewUrl
-            ? html`<img class="preview-img" src=${this.previewUrl} alt="Captured face" />`
-            : ''}
-          ${this.qualityResult
-            ? html`
-                <div class="quality-msg ${this.qualityResult.isCentered && this.qualityResult.hasFace ? 'quality-good' : 'quality-bad'}">
-                  ${this.qualityResult.message}
-                </div>
-              `
-            : ''}
-          ${this.qualityResult?.isCentered && this.qualityResult?.hasFace
-            ? html`
-                <button class="btn btn-primary" @click=${this.handleConfirm}>✓ Use this photo</button>
-                <button class="btn btn-secondary" @click=${this.handleRetake}>↻ Retake</button>
-              `
-            : html`
-                <button class="btn btn-primary" @click=${this.handleRetake}>↻ Try again</button>
-                <button class="btn btn-secondary" @click=${this.handleCancel}>Cancel</button>
-              `}
-        `;
-
       case 'error':
         return html`
           <div class="quality-msg quality-bad">${this.errorMessage}</div>
@@ -172,17 +131,21 @@ export class SimFaceCapture extends LitElement {
     try {
       const blob = await captureFromCamera();
       if (!blob) {
+        this.dispatchEvent(new CustomEvent('simface-cancelled', {
+          bubbles: true,
+          composed: true,
+        }));
         this.captureState = 'idle';
         return;
       }
 
-      this.captureState = 'analyzing';
-      this.capturedBlob = blob;
-      this.previewUrl = await blobToDataURL(blob);
+      this.dispatchEvent(new CustomEvent('simface-captured', {
+        detail: { imageBlob: blob },
+        bubbles: true,
+        composed: true,
+      }));
 
-      const img = await blobToImage(blob);
-      this.qualityResult = await assessFaceQuality(img);
-      this.captureState = 'preview';
+      this.reset();
     } catch (err) {
       this.errorMessage = err instanceof Error ? err.message : 'Capture failed';
       this.captureState = 'error';
@@ -192,18 +155,6 @@ export class SimFaceCapture extends LitElement {
         composed: true,
       }));
     }
-  }
-
-  private handleConfirm() {
-    if (!this.capturedBlob) return;
-
-    this.dispatchEvent(new CustomEvent('simface-captured', {
-      detail: { imageBlob: this.capturedBlob },
-      bubbles: true,
-      composed: true,
-    }));
-
-    this.reset();
   }
 
   private handleRetake() {
@@ -221,9 +172,6 @@ export class SimFaceCapture extends LitElement {
 
   private reset() {
     this.captureState = 'idle';
-    this.previewUrl = '';
-    this.qualityResult = null;
-    this.capturedBlob = null;
     this.errorMessage = '';
   }
 }

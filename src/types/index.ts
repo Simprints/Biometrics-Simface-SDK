@@ -35,11 +35,27 @@ export interface ValidateResult {
 }
 
 /** Face quality assessment result from MediaPipe. */
+export type FaceFeedbackCode =
+  | 'no-face'
+  | 'multiple-faces'
+  | 'too-far'
+  | 'too-close'
+  | 'move-left'
+  | 'move-right'
+  | 'move-up'
+  | 'move-down'
+  | 'turn-left'
+  | 'turn-right'
+  | 'face-unclear'
+  | 'good';
+
 export interface FaceQualityResult {
   hasFace: boolean;
   faceCount: number;
   confidence: number;
   isCentered: boolean;
+  passesQualityChecks: boolean;
+  feedback: FaceFeedbackCode;
   message: string;
 }
 

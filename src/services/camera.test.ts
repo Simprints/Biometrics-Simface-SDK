@@ -1,11 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const faceDetectionMocks = vi.hoisted(() => ({
+  assessFaceQuality: vi.fn(),
+  assessFaceQualityForVideo: vi.fn(),
+  getVideoDetector: vi.fn(),
+}));
+
+vi.mock('../services/face-detection.js', () => faceDetectionMocks);
+
 import { blobToDataURL, captureFromCamera } from '../services/camera.js';
+import type { FaceQualityResult } from '../types/index.js';
 
 const originalUserAgent = navigator.userAgent;
 const originalMediaDevices = navigator.mediaDevices;
 const originalPlay = HTMLMediaElement.prototype.play;
 const originalGetContext = HTMLCanvasElement.prototype.getContext;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+const originalRequestAnimationFrame = window.requestAnimationFrame;
+const originalCancelAnimationFrame = window.cancelAnimationFrame;
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
+const originalImage = window.Image;
 
 describe('camera service', () => {
   beforeEach(() => {
@@ -13,17 +28,30 @@ describe('camera service', () => {
     document.body.innerHTML = '';
     setUserAgent(originalUserAgent);
     setMediaDevices(originalMediaDevices);
-    HTMLMediaElement.prototype.play = originalPlay;
-    HTMLCanvasElement.prototype.getContext = originalGetContext;
-    HTMLCanvasElement.prototype.toBlob = originalToBlob;
+    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({ drawImage: vi.fn() }) as unknown as CanvasRenderingContext2D);
+    HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => {
+      callback(new Blob(['image data'], { type: 'image/jpeg' }));
+    });
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+    URL.revokeObjectURL = vi.fn();
+    window.Image = createMockImageConstructor();
+    faceDetectionMocks.assessFaceQuality.mockReset();
+    faceDetectionMocks.assessFaceQualityForVideo.mockReset();
+    faceDetectionMocks.getVideoDetector.mockReset();
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    window.Image = originalImage;
   });
 
   describe('captureFromCamera', () => {
-    it('should use in-browser camera capture on standard browsers', async () => {
+    it('auto-captures and confirms a face photo when realtime guidance is supported', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
 
       const stop = vi.fn();
@@ -32,38 +60,52 @@ describe('camera service', () => {
       } as unknown as MediaStream);
 
       setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+      faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult({
+        passesQualityChecks: true,
+        message: 'Hold still. Capturing automatically...',
+        feedback: 'good',
+      }));
 
-      HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-      HTMLCanvasElement.prototype.getContext = vi.fn(() => ({ drawImage: vi.fn() }) as unknown as CanvasRenderingContext2D);
-
-      const capturedBlob = new Blob(['image data'], { type: 'image/jpeg' });
-      HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => {
-        callback(capturedBlob);
+      const animationFrames: FrameRequestCallback[] = [];
+      window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+        animationFrames.push(callback);
+        return animationFrames.length;
       });
+      window.cancelAnimationFrame = vi.fn();
 
       const capturePromise = captureFromCamera();
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushMicrotasks();
 
       const video = document.querySelector('video') as HTMLVideoElement | null;
       expect(video).not.toBeNull();
+      if (!video) {
+        throw new Error('Video element was not rendered.');
+      }
 
       Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
       Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
       video.dispatchEvent(new Event('loadedmetadata'));
-      await Promise.resolve();
+      await flushMicrotasks();
 
-      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
-      expect(captureButton).not.toBeNull();
-      if (!captureButton) {
-        throw new Error('Capture button was not rendered.');
+      for (const timestamp of [200, 400, 600]) {
+        const callback = animationFrames.shift();
+        if (!callback) {
+          throw new Error('Expected an animation frame callback.');
+        }
+
+        callback(timestamp);
+        await flushMicrotasks();
       }
-      captureButton.disabled = false;
-      captureButton.dispatchEvent(new MouseEvent('click'));
+
+      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      expect(confirmButton).not.toBeNull();
+      confirmButton?.dispatchEvent(new MouseEvent('click'));
 
       const result = await capturePromise;
 
-      expect(result).toBe(capturedBlob);
+      expect(result).toBeInstanceOf(Blob);
+      expect(faceDetectionMocks.assessFaceQualityForVideo).toHaveBeenCalledTimes(3);
       expect(getUserMedia).toHaveBeenCalledWith({
         video: { facingMode: { ideal: 'user' } },
         audio: false,
@@ -71,7 +113,49 @@ describe('camera service', () => {
       expect(stop).toHaveBeenCalled();
     });
 
-    it('should fall back to file input capture in WhatsApp', async () => {
+    it('falls back to manual capture when realtime guidance is unavailable', async () => {
+      setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
+
+      const stop = vi.fn();
+      const getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      } as unknown as MediaStream);
+
+      setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
+
+      const capturePromise = captureFromCamera();
+      await flushMicrotasks();
+
+      const video = document.querySelector('video') as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      if (!video) {
+        throw new Error('Video element was not rendered.');
+      }
+
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks();
+
+      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      expect(captureButton).not.toBeNull();
+      expect(captureButton?.style.display).toBe('inline-flex');
+
+      captureButton?.dispatchEvent(new MouseEvent('click'));
+      await flushMicrotasks();
+
+      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      expect(confirmButton).not.toBeNull();
+      confirmButton?.dispatchEvent(new MouseEvent('click'));
+
+      const result = await capturePromise;
+      expect(result).toBeInstanceOf(Blob);
+      expect(faceDetectionMocks.assessFaceQualityForVideo).not.toHaveBeenCalled();
+      expect(stop).toHaveBeenCalled();
+    });
+
+    it('falls back to file input capture in WhatsApp', async () => {
       setUserAgent('Mozilla/5.0 WhatsApp/2.24.0');
 
       const appendSpy = vi.spyOn(document.body, 'appendChild');
@@ -93,14 +177,14 @@ describe('camera service', () => {
       expect(input.capture).toBe('user');
     });
 
-    it('should reject when in-browser capture is unavailable outside WhatsApp', async () => {
+    it('rejects when in-browser capture is unavailable outside WhatsApp', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
       setMediaDevices(undefined);
 
       await expect(captureFromCamera()).rejects.toThrow('In-browser camera capture is not supported in this browser.');
     });
 
-    it('should stop the camera stream if the capture UI fails to open', async () => {
+    it('stops the camera stream if the capture UI fails to open', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
 
       const stop = vi.fn();
@@ -109,6 +193,7 @@ describe('camera service', () => {
       } as unknown as MediaStream);
 
       setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockResolvedValue({});
       vi.spyOn(document.body, 'appendChild').mockImplementation(() => {
         throw new Error('append failed');
       });
@@ -119,13 +204,28 @@ describe('camera service', () => {
   });
 
   describe('blobToDataURL', () => {
-    it('should convert blob to data URL', async () => {
+    it('converts a blob to a data URL', async () => {
       const blob = new Blob(['hello'], { type: 'text/plain' });
       const url = await blobToDataURL(blob);
       expect(url).toMatch(/^data:/);
     });
   });
 });
+
+function createQualityResult(
+  overrides: Partial<FaceQualityResult> = {},
+): FaceQualityResult {
+  return {
+    hasFace: true,
+    faceCount: 1,
+    confidence: 0.95,
+    isCentered: true,
+    passesQualityChecks: true,
+    feedback: 'good',
+    message: 'Face looks good.',
+    ...overrides,
+  };
+}
 
 function setUserAgent(value: string) {
   Object.defineProperty(window.navigator, 'userAgent', {
@@ -139,4 +239,25 @@ function setMediaDevices(value: MediaDevices | undefined) {
     configurable: true,
     value,
   });
+}
+
+async function flushMicrotasks(iterations = 5) {
+  for (let index = 0; index < iterations; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+function createMockImageConstructor(): typeof Image {
+  return class MockImage {
+    onload: ((this: GlobalEventHandlers, ev: Event) => unknown) | null = null;
+    onerror: ((this: GlobalEventHandlers, ev: Event | string) => unknown) | null = null;
+    naturalWidth = 640;
+    naturalHeight = 480;
+
+    set src(_value: string) {
+      queueMicrotask(() => {
+        this.onload?.call(this as unknown as GlobalEventHandlers, new Event('load'));
+      });
+    }
+  } as unknown as typeof Image;
 }

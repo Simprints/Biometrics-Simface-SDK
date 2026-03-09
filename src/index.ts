@@ -13,8 +13,7 @@
 
 import type { SimFaceConfig, EnrollResult, VerifyResult } from './types/index.js';
 import { SimFaceAPIClient } from './services/api-client.js';
-import { captureFromCamera, blobToImage } from './services/camera.js';
-import { assessFaceQuality } from './services/face-detection.js';
+import { captureFromCamera } from './services/camera.js';
 
 // Re-export types and component for consumers
 export type { SimFaceConfig, EnrollResult, VerifyResult, FaceQualityResult, ValidateResult } from './types/index.js';
@@ -78,28 +77,8 @@ export async function verify(config: SimFaceConfig, clientId: string): Promise<V
 }
 
 /**
- * Capture a face image with quality validation.
- * Loops until a quality image is captured or the user cancels.
+ * Capture a face image with the camera flow's built-in quality validation.
  */
 async function captureWithQualityCheck(): Promise<Blob | null> {
-  const MAX_ATTEMPTS = 5;
-
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const blob = await captureFromCamera();
-    if (!blob) return null;
-
-    const img = await blobToImage(blob);
-    const quality = await assessFaceQuality(img);
-
-    if (quality.hasFace && quality.isCentered) {
-      return blob;
-    }
-
-    // On last attempt, accept whatever we have if a face is present
-    if (attempt === MAX_ATTEMPTS - 1 && quality.hasFace) {
-      return blob;
-    }
-  }
-
-  return null;
+  return captureFromCamera();
 }
