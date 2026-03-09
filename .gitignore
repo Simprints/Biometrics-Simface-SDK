@@ -1,14 +1,30 @@
+# Dependencies
 node_modules/
-dist/
-.vite/
 demo/node_modules/
-demo/dist/
-demo/.vite/
 
-.idea/workspace.xml
-.idea/copilot.data.migration.ask2agent.xml
+# Build output
+dist/
+demo/dist/
+.vite/
+demo/.vite/
+coverage/
+*.tsbuildinfo
+
+# Package manager files and caches
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDEs and editors
+.idea/
+*.iml
 .vscode/
 
+# OS files
 .DS_Store
 Thumbs.db
+
+# Logs
 *.log
