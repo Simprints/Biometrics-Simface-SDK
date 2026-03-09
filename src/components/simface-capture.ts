@@ -1,19 +1,31 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { blobToImage, captureFromCamera } from '../services/camera.js';
-import { assessFaceQuality, assessFaceQualityForVideo } from '../services/face-detection.js';
+import { captureFromCamera } from '../services/camera.js';
+import { assessFaceQuality } from '../services/face-detection.js';
 import {
-  AUTO_CAPTURE_ANALYSIS_INTERVAL_MS,
-  AUTO_CAPTURE_COUNTDOWN_MS,
   CAPTURE_GUIDE_MASK_PATH,
   CAPTURE_GUIDE_PATH,
-  autoCaptureCompleteMessage,
-  autoCaptureCountdownMessage,
 } from '../shared/auto-capture.js';
-import type { FaceQualityResult } from '../types/index.js';
+import {
+  buildCapturePlan,
+  normalizeCaptureOptions,
+  resolveCaptureCapabilities,
+  type CapturePlanStep,
+} from '../shared/capture-flow.js';
+import {
+  CameraCaptureSessionController,
+  type CameraCaptureSessionState,
+} from '../shared/capture-session.js';
+import {
+  CameraAccessError,
+  blobToImage,
+  captureFromFileInput,
+  openUserFacingCameraStream,
+} from '../shared/capture-runtime.js';
+import type { CapturePreference, FaceQualityResult } from '../types/index.js';
 
 type CaptureState = 'idle' | 'starting' | 'live' | 'preview' | 'error';
-type FeedbackTone = 'neutral' | 'success' | 'error';
+type FeedbackTone = 'neutral' | 'success' | 'error' | 'manual';
 
 /**
  * <simface-capture> — Web Component for capturing and quality-checking face images.
@@ -29,6 +41,10 @@ export class SimFaceCapture extends LitElement {
   @property({ type: Boolean, reflect: true }) embedded = false;
   @property({ type: Boolean, reflect: true }) active = false;
   @property({ type: String, attribute: 'confirm-label' }) confirmLabel = 'Use this capture';
+  @property({ type: String, attribute: 'capture-preference' })
+  capturePreference: CapturePreference = 'auto-preferred';
+  @property({ type: Boolean, attribute: 'allow-media-picker-fallback' })
+  allowMediaPickerFallback = true;
 
   @state() private captureState: CaptureState = 'idle';
   @state() private errorMessage = '';
@@ -41,14 +57,10 @@ export class SimFaceCapture extends LitElement {
   @query('#embedded-video') private embeddedVideoElement?: HTMLVideoElement;
 
   private stream: MediaStream | null = null;
-  private animationFrameId: number | null = null;
-  private analysisInFlight = false;
-  private lastAnalysisTimestamp = 0;
+  private sessionController: CameraCaptureSessionController | null = null;
+  private currentCaptureStep: CapturePlanStep | null = null;
   private capturedBlob: Blob | null = null;
-  private countdownStartedAt: number | null = null;
-  private bestCaptureBlob: Blob | null = null;
-  private bestCaptureScore = -1;
-  private bestQualityResult: FaceQualityResult | null = null;
+  private pendingActiveSync = false;
 
   static styles = css`
     :host {
@@ -152,12 +164,6 @@ export class SimFaceCapture extends LitElement {
       gap: 12px;
     }
 
-    .preview-img-inline {
-      max-width: 100%;
-      border-radius: 8px;
-      margin: 12px 0;
-    }
-
     .btn {
       display: inline-flex;
       align-items: center;
@@ -223,6 +229,11 @@ export class SimFaceCapture extends LitElement {
       color: #0f172a;
     }
 
+    .quality-manual {
+      background: #e0f2fe;
+      color: #0f172a;
+    }
+
     .spinner {
       display: inline-block;
       width: 24px;
@@ -251,17 +262,27 @@ export class SimFaceCapture extends LitElement {
   }
 
   updated(changedProperties: Map<string, unknown>) {
-    if (!this.embedded || !changedProperties.has('active')) {
+    if (!this.embedded || !changedProperties.has('active') || this.pendingActiveSync) {
       return;
     }
 
-    if (this.active) {
-      void this.startEmbeddedCapture();
-      return;
-    }
+    this.pendingActiveSync = true;
+    queueMicrotask(() => {
+      this.pendingActiveSync = false;
 
-    this.stopEmbeddedSession();
-    this.resetEmbeddedState();
+      if (!this.isConnected || !this.embedded) {
+        return;
+      }
+
+      if (this.active) {
+        if (this.captureState === 'idle') {
+          void this.beginEmbeddedCapture();
+        }
+        return;
+      }
+
+      this.endEmbeddedCapture();
+    });
   }
 
   render() {
@@ -284,6 +305,7 @@ export class SimFaceCapture extends LitElement {
     if (this.embedded) {
       this.active = true;
       await this.updateComplete;
+      await this.beginEmbeddedCapture();
       return;
     }
 
@@ -373,7 +395,7 @@ export class SimFaceCapture extends LitElement {
           : ''}
         ${this.captureState === 'error'
           ? html`
-              <button class="btn btn-primary" @click=${this.startEmbeddedCapture}>Try again</button>
+              <button class="btn btn-primary" @click=${this.beginEmbeddedCapture}>Try again</button>
               <button class="btn btn-ghost" @click=${this.handleEmbeddedCancel}>Cancel</button>
             `
           : ''}
@@ -385,7 +407,12 @@ export class SimFaceCapture extends LitElement {
     this.captureState = 'starting';
 
     try {
-      const blob = await captureFromCamera();
+      const blob = await captureFromCamera({
+        presentation: 'popup',
+        capturePreference: this.capturePreference,
+        allowMediaPickerFallback: this.allowMediaPickerFallback,
+      });
+
       if (!blob) {
         this.dispatchCancelled();
         this.captureState = 'idle';
@@ -411,7 +438,7 @@ export class SimFaceCapture extends LitElement {
     this.resetPopupState();
   }
 
-  private async startEmbeddedCapture() {
+  private async beginEmbeddedCapture() {
     if (!this.active || this.captureState === 'starting' || this.captureState === 'live') {
       return;
     }
@@ -421,201 +448,146 @@ export class SimFaceCapture extends LitElement {
     this.captureState = 'starting';
     this.feedbackMessage = 'Requesting camera access...';
     this.feedbackTone = 'neutral';
+
+    const options = normalizeCaptureOptions({
+      presentation: 'embedded',
+      capturePreference: this.capturePreference,
+      allowMediaPickerFallback: this.allowMediaPickerFallback,
+      label: this.label,
+      confirmLabel: this.confirmLabel,
+    });
+    const capabilities = await resolveCaptureCapabilities({
+      capturePreference: options.capturePreference,
+    });
+    const plan = buildCapturePlan(options, capabilities);
+    const cameraStep = plan.steps.find((step) => step === 'auto-camera' || step === 'manual-camera') ?? null;
+    const hasMediaPickerFallback = plan.steps.includes('media-picker');
+
+    if (!cameraStep) {
+      await this.startEmbeddedMediaPicker();
+      return;
+    }
+
+    try {
+      this.stream = await openUserFacingCameraStream();
+    } catch (error) {
+      if (error instanceof CameraAccessError && hasMediaPickerFallback) {
+        await this.startEmbeddedMediaPicker();
+        return;
+      }
+
+      this.handleEmbeddedError(error);
+      return;
+    }
+
     await this.updateComplete;
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      this.handleEmbeddedError(new Error('This browser does not support inline camera capture.'));
+    if (!this.active) {
+      this.stopEmbeddedSession();
       return;
     }
 
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'user' } },
-        audio: false,
-      });
-
-      this.captureState = 'live';
-      this.feedbackMessage = 'Center your face in the oval. We will capture automatically when framing looks good.';
-      await this.updateComplete;
-
-      const video = this.embeddedVideoElement;
-      if (!video) {
-        throw new Error('Inline camera preview could not be created.');
-      }
-
-      video.srcObject = this.stream;
-      await this.waitForVideoReady(video);
-      this.scheduleEmbeddedAnalysis();
-    } catch (error) {
-      this.handleEmbeddedError(error);
-    }
-  }
-
-  private scheduleEmbeddedAnalysis() {
-    if (this.captureState !== 'live' || !this.stream) {
-      return;
-    }
-
-    if (
-      typeof window.requestAnimationFrame !== 'function' ||
-      typeof window.cancelAnimationFrame !== 'function'
-    ) {
-      this.feedbackMessage = 'Automatic analysis is unavailable. Use Take photo now.';
-      this.feedbackTone = 'neutral';
-      return;
-    }
-
-    this.animationFrameId = window.requestAnimationFrame(async (timestamp) => {
-      if (
-        this.captureState !== 'live' ||
-        this.analysisInFlight ||
-        timestamp - this.lastAnalysisTimestamp < AUTO_CAPTURE_ANALYSIS_INTERVAL_MS
-      ) {
-        this.scheduleEmbeddedAnalysis();
-        return;
-      }
-
-      const video = this.embeddedVideoElement;
-      if (!video) {
-        return;
-      }
-
-      this.lastAnalysisTimestamp = timestamp;
-      this.analysisInFlight = true;
-
-      try {
-        const qualityResult = await assessFaceQualityForVideo(video, timestamp);
-        this.qualityResult = qualityResult;
-        if (qualityResult.passesQualityChecks) {
-          if (this.countdownStartedAt === null) {
-            this.countdownStartedAt = timestamp;
-            this.countdownProgress = 0;
-            this.feedbackMessage = 'Great framing detected. Hold still while we pick the best frame.';
-            this.feedbackTone = 'success';
-          }
-
-          await this.considerBestFrame(video, qualityResult);
-        }
-
-        if (this.countdownStartedAt !== null) {
-          this.countdownProgress = Math.min((timestamp - this.countdownStartedAt) / AUTO_CAPTURE_COUNTDOWN_MS, 1);
-          this.feedbackMessage = autoCaptureCountdownMessage(
-            timestamp,
-            this.countdownStartedAt,
-            qualityResult,
-          );
-          this.feedbackTone = qualityResult.passesQualityChecks ? 'success' : 'neutral';
-
-          if (this.countdownProgress >= 1) {
-            this.finishCountdownCapture();
-            return;
-          }
-        } else {
-          this.feedbackMessage = qualityResult.message;
-          this.feedbackTone = 'neutral';
-        }
-      } catch {
-        this.feedbackMessage = 'Automatic analysis is unavailable. Use Take photo now.';
-        this.feedbackTone = 'neutral';
-        return;
-      } finally {
-        this.analysisInFlight = false;
-      }
-
-      this.scheduleEmbeddedAnalysis();
-    });
-  }
-
-  private async captureEmbeddedFrame() {
     const video = this.embeddedVideoElement;
-    if (!video || this.captureState !== 'live') {
+    if (!video || !this.stream) {
+      this.handleEmbeddedError(new Error('Inline camera preview could not be created.'));
       return;
     }
 
+    video.srcObject = this.stream;
+    this.currentCaptureStep = cameraStep;
+    this.sessionController = new CameraCaptureSessionController({
+      videoElement: video,
+      initialMode: cameraStep === 'auto-camera' ? 'auto' : 'manual',
+      copy: {
+        autoReadyMessage: 'Center your face in the oval. We will capture automatically when framing looks good.',
+        manualReadyMessage: 'When you are ready, use Take photo now.',
+        autoUnavailableMessage: 'Automatic analysis is unavailable. Use Take photo now.',
+        retakeReadyMessage: 'When you are ready, use Take photo now.',
+      },
+      onStateChange: (state) => this.applySessionState(state),
+    });
+
     try {
-      const blob = await this.captureVideoFrame(video);
-      const qualityResult = await this.assessCapturedBlob(blob);
-
-      this.capturedBlob = blob;
-      this.qualityResult = qualityResult;
-      this.captureState = 'preview';
-      this.feedbackMessage = qualityResult?.message ?? 'Review this capture before continuing.';
-      this.feedbackTone = qualityResult
-        ? qualityResult.passesQualityChecks
-          ? 'success'
-          : 'error'
-        : 'neutral';
-
-      if (this.previewUrl) {
-        URL.revokeObjectURL(this.previewUrl);
-      }
-
-      this.previewUrl = URL.createObjectURL(blob);
-      this.countdownProgress = 0;
+      await this.sessionController.start();
     } catch (error) {
       this.handleEmbeddedError(error);
     }
   }
 
-  private async considerBestFrame(video: HTMLVideoElement, qualityResult: FaceQualityResult) {
-    if (qualityResult.captureScore <= this.bestCaptureScore) {
-      return;
-    }
+  private async startEmbeddedMediaPicker() {
+    this.stopEmbeddedSession();
+    this.currentCaptureStep = 'media-picker';
+    this.captureState = 'starting';
+    this.feedbackMessage = 'Opening media picker...';
+    this.feedbackTone = 'neutral';
 
-    const blob = await this.captureVideoFrame(video);
-    this.bestCaptureBlob = blob;
-    this.bestCaptureScore = qualityResult.captureScore;
-    this.bestQualityResult = qualityResult;
-  }
-
-  private finishCountdownCapture() {
-    if (!this.bestCaptureBlob) {
-      void this.captureEmbeddedFrame();
-      return;
-    }
-
-    this.capturedBlob = this.bestCaptureBlob;
-    this.qualityResult = this.bestQualityResult;
-    this.captureState = 'preview';
-    this.feedbackMessage = autoCaptureCompleteMessage(this.bestQualityResult);
-    this.feedbackTone = 'success';
-
-    if (this.previewUrl) {
-      URL.revokeObjectURL(this.previewUrl);
-    }
-
-    this.previewUrl = URL.createObjectURL(this.bestCaptureBlob);
-    this.countdownProgress = 1;
-  }
-
-  private async assessCapturedBlob(blob: Blob): Promise<FaceQualityResult | null> {
     try {
-      const image = await blobToImage(blob);
-      return await assessFaceQuality(image);
-    } catch {
-      return null;
+      const blob = await captureFromFileInput();
+      if (!blob) {
+        this.handleEmbeddedCancel();
+        return;
+      }
+
+      await this.showPickedPreview(blob);
+    } catch (error) {
+      this.handleEmbeddedError(error);
     }
+  }
+
+  private applySessionState(state: CameraCaptureSessionState) {
+    this.captureState = state.phase;
+    this.feedbackMessage = state.feedbackMessage;
+    this.feedbackTone = state.feedbackTone;
+    this.countdownProgress = state.countdownProgress;
+    this.qualityResult = state.qualityResult;
+    this.errorMessage = state.phase === 'error' ? state.errorMessage : '';
+
+    if (state.phase === 'preview') {
+      this.capturedBlob = state.previewBlob;
+      this.setPreviewBlob(state.previewBlob);
+      return;
+    }
+
+    this.capturedBlob = null;
+    this.clearPreviewUrl();
+  }
+
+  private async showPickedPreview(blob: Blob) {
+    const qualityResult = await this.assessPickedBlob(blob);
+    this.capturedBlob = blob;
+    this.qualityResult = qualityResult;
+    this.captureState = 'preview';
+    this.feedbackMessage = qualityResult?.message ?? 'Review this capture before continuing.';
+    this.feedbackTone = qualityResult
+      ? qualityResult.passesQualityChecks
+        ? 'success'
+        : 'error'
+      : 'neutral';
+    this.countdownProgress = qualityResult ? 1 : 0;
+    this.setPreviewBlob(blob);
   }
 
   private handleEmbeddedManualCapture() {
-    void this.captureEmbeddedFrame();
+    void this.sessionController?.takePhotoNow().catch((error) => {
+      this.handleEmbeddedError(error);
+    });
   }
 
   private handleEmbeddedRetake() {
     this.capturedBlob = null;
     this.qualityResult = null;
-    this.captureState = 'live';
+    this.clearPreviewUrl();
 
-    if (this.previewUrl) {
-      URL.revokeObjectURL(this.previewUrl);
-      this.previewUrl = '';
+    if (this.currentCaptureStep === 'media-picker') {
+      if (this.active) {
+        void this.beginEmbeddedCapture();
+      }
+      return;
     }
 
-    this.feedbackMessage = 'Ready to capture again.';
-    this.feedbackTone = 'neutral';
-    this.resetCountdown();
-    this.resumeEmbeddedVideo();
-    this.scheduleEmbeddedAnalysis();
+    void this.sessionController?.retake().catch((error) => {
+      this.handleEmbeddedError(error);
+    });
   }
 
   private handleEmbeddedConfirm() {
@@ -646,11 +618,15 @@ export class SimFaceCapture extends LitElement {
     this.dispatchError(this.errorMessage);
   }
 
+  private endEmbeddedCapture() {
+    this.stopEmbeddedSession();
+    this.resetEmbeddedState();
+  }
+
   private stopEmbeddedSession() {
-    if (this.animationFrameId !== null) {
-      window.cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    this.sessionController?.stop();
+    this.sessionController = null;
+    this.currentCaptureStep = null;
 
     if (this.stream) {
       this.stream.getTracks().forEach((track) => track.stop());
@@ -662,17 +638,11 @@ export class SimFaceCapture extends LitElement {
       video.srcObject = null;
     }
 
-    this.analysisInFlight = false;
-    this.lastAnalysisTimestamp = 0;
-    this.resetCountdown();
+    this.countdownProgress = 0;
   }
 
   private resetEmbeddedState() {
-    if (this.previewUrl) {
-      URL.revokeObjectURL(this.previewUrl);
-      this.previewUrl = '';
-    }
-
+    this.clearPreviewUrl();
     this.captureState = 'idle';
     this.errorMessage = '';
     this.feedbackMessage = 'Start a capture to see camera guidance here.';
@@ -685,6 +655,18 @@ export class SimFaceCapture extends LitElement {
   private resetPopupState() {
     this.captureState = 'idle';
     this.errorMessage = '';
+  }
+
+  private setPreviewBlob(blob: Blob) {
+    this.clearPreviewUrl();
+    this.previewUrl = URL.createObjectURL(blob);
+  }
+
+  private clearPreviewUrl() {
+    if (this.previewUrl) {
+      URL.revokeObjectURL(this.previewUrl);
+      this.previewUrl = '';
+    }
   }
 
   private dispatchCaptured(blob: Blob) {
@@ -719,82 +701,21 @@ export class SimFaceCapture extends LitElement {
       return 'quality-bad';
     }
 
+    if (this.feedbackTone === 'manual') {
+      return 'quality-manual';
+    }
+
     return 'quality-neutral';
   }
 
-  private waitForVideoReady(video: HTMLVideoElement): Promise<void> {
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      return video.play().then(() => undefined);
+  private async assessPickedBlob(blob: Blob): Promise<FaceQualityResult | null> {
+    try {
+      const image = await blobToImage(blob);
+      return await assessFaceQuality(image);
+    } catch {
+      return null;
     }
-
-    return new Promise((resolve, reject) => {
-      const handleReady = () => {
-        cleanup();
-        video.play().then(() => resolve()).catch(reject);
-      };
-
-      const handleError = () => {
-        cleanup();
-        reject(new Error('Failed to start the inline camera preview.'));
-      };
-
-      const cleanup = () => {
-        video.removeEventListener('loadedmetadata', handleReady);
-        video.removeEventListener('error', handleError);
-      };
-
-      video.addEventListener('loadedmetadata', handleReady, { once: true });
-      video.addEventListener('error', handleError, { once: true });
-    });
   }
-
-  private captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
-    if (!video.videoWidth || !video.videoHeight) {
-      return Promise.reject(new Error('Camera preview is not ready yet.'));
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-      return Promise.reject(new Error('Failed to initialize camera capture.'));
-    }
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('Failed to capture an image.'));
-          return;
-        }
-
-        resolve(blob);
-      }, 'image/jpeg', 0.92);
-    });
-  }
-
-  private resumeEmbeddedVideo() {
-    const video = this.embeddedVideoElement;
-    if (!video) {
-      return;
-    }
-
-    void video.play().catch(() => {
-      // Ignore replay failures here; the initial preview startup path already errors loudly.
-    });
-  }
-
-  private resetCountdown() {
-    this.countdownStartedAt = null;
-    this.countdownProgress = 0;
-    this.bestCaptureBlob = null;
-    this.bestCaptureScore = -1;
-    this.bestQualityResult = null;
-  }
-
 }
 
 declare global {

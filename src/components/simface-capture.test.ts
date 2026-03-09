@@ -8,6 +8,7 @@ const cameraMocks = vi.hoisted(() => ({
 const faceDetectionMocks = vi.hoisted(() => ({
   assessFaceQuality: vi.fn(),
   assessFaceQualityForVideo: vi.fn(),
+  getVideoDetector: vi.fn(),
 }));
 
 vi.mock('../services/camera.js', () => cameraMocks);
@@ -23,6 +24,8 @@ const originalGetContext = HTMLCanvasElement.prototype.getContext;
 const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 const originalRequestAnimationFrame = window.requestAnimationFrame;
 const originalCancelAnimationFrame = window.cancelAnimationFrame;
+const originalSetTimeout = window.setTimeout;
+const originalClearTimeout = window.clearTimeout;
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
 
@@ -37,12 +40,15 @@ describe('<simface-capture>', () => {
     });
     window.requestAnimationFrame = originalRequestAnimationFrame;
     window.cancelAnimationFrame = originalCancelAnimationFrame;
+    window.setTimeout = originalSetTimeout;
+    window.clearTimeout = originalClearTimeout;
     URL.createObjectURL = vi.fn(() => 'blob:preview');
     URL.revokeObjectURL = vi.fn();
     cameraMocks.blobToImage.mockReset();
     cameraMocks.captureFromCamera.mockReset();
     faceDetectionMocks.assessFaceQuality.mockReset();
     faceDetectionMocks.assessFaceQualityForVideo.mockReset();
+    faceDetectionMocks.getVideoDetector.mockReset();
   });
 
   afterEach(() => {
@@ -87,11 +93,19 @@ describe('<simface-capture>', () => {
       return animationFrames.length;
     });
     window.cancelAnimationFrame = vi.fn();
+    window.setTimeout = vi.fn((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        callback();
+      }
+      return 1 as unknown as number;
+    }) as typeof window.setTimeout;
+    window.clearTimeout = vi.fn() as typeof window.clearTimeout;
 
     faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult({
       passesQualityChecks: true,
       message: 'Hold still. Capturing automatically...',
     }));
+    faceDetectionMocks.getVideoDetector.mockResolvedValue({});
     cameraMocks.blobToImage.mockResolvedValue({ naturalWidth: 640, naturalHeight: 480 });
     faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
 

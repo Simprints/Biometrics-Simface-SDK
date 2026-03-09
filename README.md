@@ -8,7 +8,7 @@ This repository is the public frontend SDK and demo repo for SimFace. For fronte
 
 The backend API, infrastructure, and TensorFlow Lite runtime live in the separate private backend repository.
 
-In standard browsers, the SDK uses an in-page camera flow powered by `getUserMedia()`. In WhatsApp, it falls back to the native capture handoff because that path is more reliable in the in-app browser.
+The capture flow is planned explicitly as: auto camera -> manual camera -> media picker. Hosts can keep the default popup experience or opt into embedded capture with the same fallback policy.
 
 ## Quick Start
 
@@ -90,12 +90,41 @@ npm run dev
 
 The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`.
 
+## Capture strategy
+
+The top-level SDK helpers accept an optional third `captureOptions` argument so the host can choose popup vs embedded capture and tune the fallback chain:
+
+```javascript
+import { enroll } from '@simprints/simface-sdk';
+
+const result = await enroll(config, 'unique-user-id', {
+  presentation: 'embedded',
+  container: '#capture-slot',
+  capturePreference: 'auto-preferred',
+  allowMediaPickerFallback: true,
+  label: 'Capture a face for enrollment',
+  confirmLabel: 'Confirm enrollment capture',
+});
+```
+
+Supported capture planning options:
+
+- `presentation: 'popup' | 'embedded'`
+- `capturePreference: 'auto-preferred' | 'manual-only'`
+- `allowMediaPickerFallback: boolean`
+- `container: HTMLElement | string` (required for top-level embedded capture)
+- `label` / `confirmLabel`
+
 ## Web Component
 
 For more control over the UI, use the `<simface-capture>` Web Component directly:
 
 ```html
-<simface-capture label="Take a selfie for verification"></simface-capture>
+<simface-capture
+  embedded
+  capture-preference="auto-preferred"
+  label="Take a selfie for verification"
+></simface-capture>
 
 <script type="module">
   import '@simprints/simface-sdk';
@@ -129,6 +158,10 @@ For more control over the UI, use the `<simface-capture>` Web Component directly
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `label` | String | `"Take a selfie"` | Instructional text shown on the capture button |
+| `embedded` | Boolean | `false` | Runs the component inline instead of delegating to the popup capture service |
+| `confirm-label` | String | `"Use this capture"` | Confirm button label used in preview state |
+| `capture-preference` | `"auto-preferred" \| "manual-only"` | `"auto-preferred"` | Whether auto capture should be preferred or disabled |
+| `allow-media-picker-fallback` | Boolean | `true` | Whether the component may fall back to the media picker if camera capture is unavailable |
 
 ### Events
 
@@ -140,7 +173,7 @@ For more control over the UI, use the `<simface-capture>` Web Component directly
 
 ## API Reference
 
-### `enroll(config, clientId): Promise<EnrollResult>`
+### `enroll(config, clientId, captureOptions?): Promise<EnrollResult>`
 
 Opens the camera, captures a face image with quality validation, and enrolls the user.
 
@@ -150,6 +183,7 @@ Parameters:
 |-----------|------|-------------|
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
+| `captureOptions` | `SimFaceCaptureOptions` | Optional capture presentation/fallback overrides |
 
 Returns `EnrollResult`:
 ```typescript
@@ -161,7 +195,7 @@ Returns `EnrollResult`:
 }
 ```
 
-### `verify(config, clientId): Promise<VerifyResult>`
+### `verify(config, clientId, captureOptions?): Promise<VerifyResult>`
 
 Opens the camera, captures a face image, and verifies against the enrolled face.
 
@@ -171,6 +205,7 @@ Parameters:
 |-----------|------|-------------|
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
+| `captureOptions` | `SimFaceCaptureOptions` | Optional capture presentation/fallback overrides |
 
 Returns `VerifyResult`:
 ```typescript
@@ -190,6 +225,19 @@ Returns `VerifyResult`:
   apiUrl: string;
   projectId: string;
   apiKey: string;
+}
+```
+
+### `SimFaceCaptureOptions`
+
+```typescript
+{
+  presentation?: 'popup' | 'embedded';
+  capturePreference?: 'auto-preferred' | 'manual-only';
+  allowMediaPickerFallback?: boolean;
+  container?: HTMLElement | string;
+  label?: string;
+  confirmLabel?: string;
 }
 ```
 

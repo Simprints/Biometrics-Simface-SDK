@@ -11,12 +11,26 @@
  *   const result = await verify({ apiUrl: '...', projectId: '...', apiKey: '...' }, 'user-123');
  */
 
-import type { SimFaceConfig, EnrollResult, VerifyResult } from './types/index.js';
+import type {
+  SimFaceCaptureOptions,
+  SimFaceConfig,
+  EnrollResult,
+  VerifyResult,
+} from './types/index.js';
 import { SimFaceAPIClient } from './services/api-client.js';
 import { captureFromCamera } from './services/camera.js';
 
 // Re-export types and component for consumers
-export type { SimFaceConfig, EnrollResult, VerifyResult, FaceQualityResult, ValidateResult } from './types/index.js';
+export type {
+  CapturePreference,
+  CapturePresentation,
+  SimFaceCaptureOptions,
+  SimFaceConfig,
+  EnrollResult,
+  VerifyResult,
+  FaceQualityResult,
+  ValidateResult,
+} from './types/index.js';
 export { SimFaceAPIClient } from './services/api-client.js';
 export { assessFaceQuality, assessFaceQualityForVideo } from './services/face-detection.js';
 export { captureFromCamera, blobToImage, blobToDataURL } from './services/camera.js';
@@ -29,15 +43,21 @@ export { SimFaceCapture } from './components/simface-capture.js';
  * and sends it to the backend for enrollment.
  *
  * If the user is already enrolled, returns { alreadyEnrolled: true }.
+ * The optional capture options let the host choose popup vs embedded capture
+ * and the preferred fallback policy.
  */
-export async function enroll(config: SimFaceConfig, clientId: string): Promise<EnrollResult> {
+export async function enroll(
+  config: SimFaceConfig,
+  clientId: string,
+  captureOptions?: SimFaceCaptureOptions,
+): Promise<EnrollResult> {
   const client = new SimFaceAPIClient(config);
 
   // Validate API key first
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck();
+  const blob = await captureWithQualityCheck(captureOptions);
   if (!blob) {
     return { success: false, clientId, message: 'Capture cancelled by user' };
   }
@@ -60,15 +80,21 @@ export async function enroll(config: SimFaceConfig, clientId: string): Promise<E
  * and sends it to the backend for comparison against the enrolled image.
  *
  * If the user is not enrolled, returns { notEnrolled: true }.
+ * The optional capture options let the host choose popup vs embedded capture
+ * and the preferred fallback policy.
  */
-export async function verify(config: SimFaceConfig, clientId: string): Promise<VerifyResult> {
+export async function verify(
+  config: SimFaceConfig,
+  clientId: string,
+  captureOptions?: SimFaceCaptureOptions,
+): Promise<VerifyResult> {
   const client = new SimFaceAPIClient(config);
 
   // Validate API key first
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck();
+  const blob = await captureWithQualityCheck(captureOptions);
   if (!blob) {
     return { match: false, score: 0, threshold: 0, message: 'Capture cancelled by user' };
   }
@@ -79,6 +105,8 @@ export async function verify(config: SimFaceConfig, clientId: string): Promise<V
 /**
  * Capture a face image with the camera flow's built-in quality validation.
  */
-async function captureWithQualityCheck(): Promise<Blob | null> {
-  return captureFromCamera();
+async function captureWithQualityCheck(
+  captureOptions?: SimFaceCaptureOptions,
+): Promise<Blob | null> {
+  return captureFromCamera(captureOptions);
 }
