@@ -84,6 +84,10 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.card-capture {
+  grid-column: 1 / -1;
+}
+
 .config-form {
   display: grid;
   gap: 14px;
@@ -198,6 +202,7 @@ h3 {
   font-size: 0.92rem;
 }
 
+
 .checklist {
   margin: 0;
   padding-left: 20px;
@@ -251,4 +256,5 @@ h3 {
     align-items: flex-start;
     flex-direction: column;
   }
+
 }

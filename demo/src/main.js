@@ -1,5 +1,6 @@
 import './styles.css';
-import { enroll, verify, SimFaceAPIClient } from '@simprints/simface-sdk';
+import '@simprints/simface-sdk';
+import { SimFaceAPIClient } from '@simprints/simface-sdk';
 
 const STORAGE_KEY = 'simface-demo-config';
 const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
@@ -29,10 +30,24 @@ const statusBadge = document.querySelector('#status-badge');
 const statusCopy = document.querySelector('#status-copy');
 const resultOutput = document.querySelector('#result-output');
 const eventLog = document.querySelector('#event-log');
+const captureElement = document.querySelector('#inline-capture');
+
+const actionSession = {
+  action: null,
+  config: null,
+  submitting: false,
+};
 
 loadConfig();
+initializeCaptureComponent();
 wireInputPersistence();
 wireActions();
+
+function initializeCaptureComponent() {
+  captureElement.embedded = true;
+  captureElement.active = false;
+  captureElement.confirmLabel = 'Confirm capture';
+}
 
 function loadConfig() {
   const saved = readStoredConfig();
@@ -64,10 +79,13 @@ function persistConfig() {
 }
 
 function wireActions() {
-  buttons.validate.addEventListener('click', () => runAction('validate'));
-  buttons.enroll.addEventListener('click', () => runAction('enroll'));
-  buttons.verify.addEventListener('click', () => runAction('verify'));
+  buttons.validate.addEventListener('click', runValidateAction);
+  buttons.enroll.addEventListener('click', () => startComponentCapture('enroll'));
+  buttons.verify.addEventListener('click', () => startComponentCapture('verify'));
   clearLogButton.addEventListener('click', clearLog);
+  captureElement.addEventListener('simface-captured', handleComponentCaptured);
+  captureElement.addEventListener('simface-cancelled', handleComponentCancelled);
+  captureElement.addEventListener('simface-error', handleComponentError);
 }
 
 function getConfig() {
@@ -93,16 +111,20 @@ function requireConfig(action) {
   return config;
 }
 
-async function runAction(action) {
+async function runValidateAction() {
+  await runAction('validate', async (config) => {
+    const client = new SimFaceAPIClient(config);
+    return client.validateAPIKey();
+  });
+}
+
+async function runAction(action, executor) {
   let config;
 
   try {
     config = requireConfig(action);
   } catch (error) {
-    const message = describeError(error);
-    setStatus('error', 'Configuration incomplete');
-    setResult({ action, ok: false, error: message });
-    appendLog('error', message);
+    handleActionError(action, error, 'Configuration incomplete');
     return;
   }
 
@@ -112,17 +134,7 @@ async function runAction(action) {
   appendLog('info', describeActionStart(action));
 
   try {
-    let result;
-
-    if (action === 'validate') {
-      const client = new SimFaceAPIClient(config);
-      result = await client.validateAPIKey();
-    } else if (action === 'enroll') {
-      result = await enroll(config, config.clientId);
-    } else {
-      result = await verify(config, config.clientId);
-    }
-
+    const result = await executor(config);
     const summary = summarizeActionResult(action, result);
     setStatus(summary.kind, summary.message);
     setResult({ action, ok: true, result });
@@ -137,10 +149,111 @@ async function runAction(action) {
   }
 }
 
+function startComponentCapture(action) {
+  let config;
+
+  try {
+    config = requireConfig(action);
+  } catch (error) {
+    handleActionError(action, error, 'Configuration incomplete');
+    return;
+  }
+
+  persistConfig();
+  actionSession.action = action;
+  actionSession.config = config;
+  actionSession.submitting = false;
+
+  captureElement.embedded = true;
+  captureElement.label = `Capture a face for ${action}.`;
+  captureElement.confirmLabel = `Confirm ${action}`;
+  void captureElement.startCapture();
+
+  setBusy(action, true);
+  setStatus('running', `${capitalize(action)} flow started. The SDK capture component is active in the page.`);
+  appendLog('info', `${capitalize(action)} flow started in the embedded SDK component.`);
+}
+
+async function handleComponentCaptured(event) {
+  if (!actionSession.action || actionSession.submitting) {
+    return;
+  }
+
+  actionSession.submitting = true;
+  const { imageBlob } = event.detail;
+  const { action, config } = actionSession;
+
+  setStatus('running', `Submitting ${action} request to the backend.`);
+  appendLog('info', `Submitting ${action} request with a capture produced by the SDK component.`);
+
+  try {
+    const client = new SimFaceAPIClient(config);
+    const result = action === 'enroll'
+      ? await client.enroll(config.clientId, imageBlob)
+      : await client.verify(config.clientId, imageBlob);
+
+    const summary = summarizeActionResult(action, result);
+    setStatus(summary.kind, summary.message);
+    setResult({ action, ok: true, result });
+    appendLog(summary.logKind, `${summary.message} Capture was completed by the SDK component.`, result);
+  } catch (error) {
+    const message = describeError(error);
+    setStatus('error', message);
+    setResult({ action, ok: false, error: message });
+    appendLog('error', message);
+  } finally {
+    setBusy(action, false);
+    resetActionSession();
+  }
+}
+
+function handleComponentCancelled() {
+  if (!actionSession.action || actionSession.submitting) {
+    return;
+  }
+
+  const action = actionSession.action;
+  appendLog('info', `${capitalize(action)} capture cancelled.`);
+  setStatus('idle', 'Capture cancelled.');
+  setResult({ action, ok: false, error: 'Capture cancelled by user' });
+  setBusy(action, false);
+  resetActionSession();
+}
+
+function handleComponentError(event) {
+  if (!actionSession.action || actionSession.submitting) {
+    return;
+  }
+
+  const action = actionSession.action;
+  const message = event.detail?.error || 'Capture failed';
+  appendLog('error', message);
+  setStatus('error', message);
+  setResult({ action, ok: false, error: message });
+  setBusy(action, false);
+  resetActionSession();
+}
+
+function resetActionSession() {
+  actionSession.action = null;
+  actionSession.config = null;
+  actionSession.submitting = false;
+  captureElement.active = false;
+  captureElement.label = 'Choose Enroll or Verify to begin capture.';
+  captureElement.confirmLabel = 'Confirm capture';
+}
+
+function handleActionError(action, error, statusMessage) {
+  const message = describeError(error);
+  setStatus('error', statusMessage);
+  setResult({ action, ok: false, error: message });
+  appendLog('error', message);
+}
+
 function setBusy(currentAction, busy) {
   for (const [action, button] of Object.entries(buttons)) {
     button.disabled = busy;
-    button.textContent = busy && action === currentAction ? `${capitalize(action)}…` : defaultButtonLabel(action);
+    button.textContent = busy && action === currentAction ? `${capitalize(action)}...` : defaultButtonLabel(action);
   }
 }
 
@@ -178,7 +291,8 @@ function describeActionStart(action) {
   if (action === 'validate') {
     return 'Validating API credentials against the configured backend.';
   }
-  return `${capitalize(action)} flow started. The SDK will open the capture flow in the browser.`;
+
+  return `${capitalize(action)} flow started. The SDK capture component will run inline in the page.`;
 }
 
 function normalizeApiUrl(value) {

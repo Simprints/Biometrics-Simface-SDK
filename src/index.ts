@@ -18,7 +18,7 @@ import { captureFromCamera } from './services/camera.js';
 // Re-export types and component for consumers
 export type { SimFaceConfig, EnrollResult, VerifyResult, FaceQualityResult, ValidateResult } from './types/index.js';
 export { SimFaceAPIClient } from './services/api-client.js';
-export { assessFaceQuality } from './services/face-detection.js';
+export { assessFaceQuality, assessFaceQualityForVideo } from './services/face-detection.js';
 export { captureFromCamera, blobToImage, blobToDataURL } from './services/camera.js';
 export { SimFaceCapture } from './components/simface-capture.js';
 
