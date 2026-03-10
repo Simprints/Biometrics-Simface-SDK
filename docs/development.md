@@ -68,14 +68,14 @@ npm install
 npm run dev
 ```
 
-The demo runs at `http://localhost:4173` by default.
+The demo runs at `http://localhost:4173` by default. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
 
 ## Local demo workflow
 
 1. Build the SDK at the repository root.
 2. Start the separate backend service locally.
 3. Start the demo from `demo/`.
-4. Open `http://localhost:4173`, fill in `projectId`, `apiKey`, and `clientId`, then use Validate, Enroll, and Verify.
+4. Open `http://localhost:4173` (or `https://localhost:4173` if `DEMO_USE_HTTPS=true`), fill in `projectId`, `apiKey`, and `clientId`, then use Validate, Enroll, and Verify.
 
 > Note: The demo expects a real backend, usually at `http://localhost:8080`.
 >

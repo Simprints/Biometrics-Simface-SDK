@@ -33,7 +33,8 @@ async function main() {
 
   console.log('Starting SDK watcher and demo dev server...');
   const sdkWatcher = startManagedProcess(repoRoot, rootViteCli, ['build', '--watch']);
-  const viteArgs = process.argv.includes('--host') ? ['--host'] : [];
+  const hostArg = process.argv.find((arg) => arg === '--host' || arg.startsWith('--host='));
+  const viteArgs = hostArg ? [hostArg] : [];
   const demoServer = startManagedProcess(demoRoot, demoViteCli, viteArgs);
 
   registerShutdownHandlers();

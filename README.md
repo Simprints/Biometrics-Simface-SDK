@@ -88,7 +88,7 @@ npm install
 npm run dev
 ```
 
-The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`.
+The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
 
 ## Capture strategy
 
