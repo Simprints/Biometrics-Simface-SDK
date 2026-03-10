@@ -8,9 +8,8 @@ const faceDetectionMocks = vi.hoisted(() => ({
 
 vi.mock('../services/face-detection.js', () => faceDetectionMocks);
 
-import './simface-capture.js';
+import { SimFaceCapture } from './simface-capture.js';
 import type { FaceQualityResult } from '../types/index.js';
-import type { SimFaceCapture } from './simface-capture.js';
 
 const originalMediaDevices = navigator.mediaDevices;
 const originalPlay = HTMLMediaElement.prototype.play;
@@ -233,6 +232,77 @@ describe('<simface-capture>', () => {
     expect(capturedListener).toHaveBeenCalledTimes(1);
     expect(capturedListener.mock.calls[0][0].detail.imageBlob).toBeInstanceOf(Blob);
     expect(stop).toHaveBeenCalled();
+  });
+
+  it('declares color-scheme light to prevent iOS dark-mode flicker', () => {
+    const cssText = (SimFaceCapture as unknown as { styles: { cssText: string } }).styles.cssText;
+    expect(cssText).toContain('color-scheme: light');
+  });
+
+  it('updates --capture-progress on the host element during auto-capture countdown', async () => {
+    const stop = vi.fn();
+    setMediaDevices({
+      getUserMedia: vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      }),
+    } as unknown as MediaDevices);
+
+    const animationFrames: FrameRequestCallback[] = [];
+    window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+    window.cancelAnimationFrame = vi.fn();
+    window.setTimeout = vi.fn((callback: TimerHandler) => {
+      if (typeof callback === 'function') {
+        callback();
+      }
+      return 1 as unknown as number;
+    }) as typeof window.setTimeout;
+    window.clearTimeout = vi.fn() as typeof window.clearTimeout;
+
+    faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult({
+      passesQualityChecks: true,
+      message: 'Hold still.',
+    }));
+    faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+
+    const element = document.createElement('simface-capture') as SimFaceCapture;
+    element.embedded = true;
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    element.active = true;
+    await element.updateComplete;
+    await flushMicrotasks();
+
+    const video = element.shadowRoot?.querySelector('#embedded-video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    if (!video) throw new Error('Video not rendered.');
+
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+    video.dispatchEvent(new Event('loadedmetadata'));
+    await flushMicrotasks();
+
+    // First frame starts the countdown at t=200
+    const callback1 = animationFrames.shift();
+    expect(callback1).toBeDefined();
+    callback1!(200);
+    await flushMicrotasks();
+
+    // Second frame at t=2700 should have meaningful progress
+    const callback2 = animationFrames.shift();
+    expect(callback2).toBeDefined();
+    callback2!(2700);
+    await flushMicrotasks();
+
+    const progress = element.style.getPropertyValue('--capture-progress');
+    expect(Number(progress)).toBeGreaterThan(0);
+
+    // The guide-overlay div should NOT carry an inline --capture-progress style
+    const overlay = element.shadowRoot?.querySelector('.guide-overlay') as HTMLElement | null;
+    expect(overlay?.style.getPropertyValue('--capture-progress')).toBe('');
   });
 });
 

@@ -51,7 +51,6 @@ export class SimFaceCapture extends LitElement {
   @state() private feedbackMessage = 'Start a capture to see camera guidance here.';
   @state() private feedbackTone: FeedbackTone = 'neutral';
   @state() private previewUrl = '';
-  @state() private countdownProgress = 0;
   @state() private qualityResult: FaceQualityResult | null = null;
   @state() private canTakePhoto = true;
   @state() private captureMode: LiveCaptureMode = 'auto';
@@ -71,6 +70,7 @@ export class SimFaceCapture extends LitElement {
       max-width: 400px;
       margin: 0 auto;
       text-align: center;
+      color-scheme: light;
     }
 
     :host([embedded]) {
@@ -324,7 +324,6 @@ export class SimFaceCapture extends LitElement {
               />
               <div
                 class="guide-overlay ${this.captureState === 'live' || this.captureState === 'starting' ? '' : 'hidden'}"
-                style=${`--capture-progress:${this.countdownProgress};`}
               >
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   <path class="guide-mask" d=${CAPTURE_GUIDE_MASK_PATH}></path>
@@ -467,7 +466,7 @@ export class SimFaceCapture extends LitElement {
     this.captureState = state.phase;
     this.feedbackMessage = state.feedbackMessage;
     this.feedbackTone = state.feedbackTone;
-    this.countdownProgress = state.countdownProgress;
+    this.syncProgress(state.countdownProgress);
     this.qualityResult = state.qualityResult;
     this.errorMessage = state.phase === 'error' ? state.errorMessage : '';
     this.canTakePhoto = state.canTakePhoto;
@@ -494,7 +493,7 @@ export class SimFaceCapture extends LitElement {
         ? 'success'
         : 'error'
       : 'neutral';
-    this.countdownProgress = qualityResult ? 1 : 0;
+    this.syncProgress(qualityResult ? 1 : 0);
     this.setPreviewBlob(blob);
   }
 
@@ -569,7 +568,7 @@ export class SimFaceCapture extends LitElement {
       video.srcObject = null;
     }
 
-    this.countdownProgress = 0;
+    this.syncProgress(0);
   }
 
   private resetState() {
@@ -578,10 +577,14 @@ export class SimFaceCapture extends LitElement {
     this.errorMessage = '';
     this.feedbackMessage = 'Start a capture to see camera guidance here.';
     this.feedbackTone = 'neutral';
-    this.countdownProgress = 0;
+    this.syncProgress(0);
     this.qualityResult = null;
     this.capturedBlob = null;
     this.captureMode = 'auto';
+  }
+
+  private syncProgress(progress: number) {
+    this.style.setProperty('--capture-progress', String(progress));
   }
 
   private setPreviewBlob(blob: Blob) {

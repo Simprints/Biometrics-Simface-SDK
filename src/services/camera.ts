@@ -162,6 +162,7 @@ async function captureFromPopupCamera(
       justifyContent: 'center',
       padding: '24px',
       background: 'rgba(15, 23, 42, 0.82)',
+      colorScheme: 'light',
     });
 
     const element = document.createElement('simface-capture') as CaptureElement;
