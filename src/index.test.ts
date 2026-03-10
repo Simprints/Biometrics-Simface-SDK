@@ -10,7 +10,7 @@ const apiClientMethodMocks = vi.hoisted(() => ({
   verify: vi.fn(),
 }));
 
-const apiClientConstructor = vi.hoisted(() => vi.fn(() => apiClientMethodMocks));
+const apiClientConstructor = vi.hoisted(() => vi.fn(function () { return apiClientMethodMocks; }));
 
 vi.mock('./services/camera.js', () => ({
   captureFromCamera: captureMocks.captureFromCamera,
@@ -36,9 +36,8 @@ describe('SDK entrypoints', () => {
   };
 
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     captureMocks.captureFromCamera.mockReset();
-    apiClientConstructor.mockClear();
     apiClientMethodMocks.validateAPIKey.mockReset();
     apiClientMethodMocks.enroll.mockReset();
     apiClientMethodMocks.verify.mockReset();
