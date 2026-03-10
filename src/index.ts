@@ -13,6 +13,7 @@
 
 import type {
   SimFaceCaptureOptions,
+  SimFaceWorkflowOptions,
   SimFaceConfig,
   EnrollResult,
   VerifyResult,
@@ -23,8 +24,9 @@ import { captureFromCamera } from './services/camera.js';
 // Re-export types and component for consumers
 export type {
   CapturePreference,
-  CapturePresentation,
   SimFaceCaptureOptions,
+  SimFaceCaptureElement,
+  SimFaceWorkflowOptions,
   SimFaceConfig,
   EnrollResult,
   VerifyResult,
@@ -43,12 +45,13 @@ export { SimFaceCapture } from './components/simface-capture.js';
  * and sends it to the backend for enrollment.
  *
  * If the user is already enrolled, returns { alreadyEnrolled: true }.
- * The optional capture options let the host choose popup vs embedded capture
- * and the preferred fallback policy.
+ * The optional workflow options control cross-presentation capture behavior.
+ * Passing capture UI options switches the helper into embedded mode.
  */
 export async function enroll(
   config: SimFaceConfig,
   clientId: string,
+  workflowOptions?: SimFaceWorkflowOptions,
   captureOptions?: SimFaceCaptureOptions,
 ): Promise<EnrollResult> {
   const client = new SimFaceAPIClient(config);
@@ -57,7 +60,7 @@ export async function enroll(
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck(captureOptions);
+  const blob = await captureWithQualityCheck(workflowOptions, captureOptions);
   if (!blob) {
     return { success: false, clientId, message: 'Capture cancelled by user' };
   }
@@ -80,12 +83,13 @@ export async function enroll(
  * and sends it to the backend for comparison against the enrolled image.
  *
  * If the user is not enrolled, returns { notEnrolled: true }.
- * The optional capture options let the host choose popup vs embedded capture
- * and the preferred fallback policy.
+ * The optional workflow options control cross-presentation capture behavior.
+ * Passing capture UI options switches the helper into embedded mode.
  */
 export async function verify(
   config: SimFaceConfig,
   clientId: string,
+  workflowOptions?: SimFaceWorkflowOptions,
   captureOptions?: SimFaceCaptureOptions,
 ): Promise<VerifyResult> {
   const client = new SimFaceAPIClient(config);
@@ -94,7 +98,7 @@ export async function verify(
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck(captureOptions);
+  const blob = await captureWithQualityCheck(workflowOptions, captureOptions);
   if (!blob) {
     return { match: false, score: 0, threshold: 0, message: 'Capture cancelled by user' };
   }
@@ -106,7 +110,8 @@ export async function verify(
  * Capture a face image with the camera flow's built-in quality validation.
  */
 async function captureWithQualityCheck(
+  workflowOptions?: SimFaceWorkflowOptions,
   captureOptions?: SimFaceCaptureOptions,
 ): Promise<Blob | null> {
-  return captureFromCamera(captureOptions);
+  return captureFromCamera(workflowOptions, captureOptions);
 }

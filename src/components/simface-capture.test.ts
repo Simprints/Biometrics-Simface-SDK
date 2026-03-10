@@ -160,6 +160,63 @@ describe('<simface-capture>', () => {
     expect(captureButton2?.textContent).toBe('Take photo');
   });
 
+  it('renders custom action labels in manual, preview, and error states', async () => {
+    const stop = vi.fn();
+    setMediaDevices({
+      getUserMedia: vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      }),
+    } as unknown as MediaDevices);
+    faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
+    faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
+
+    const element = document.createElement('simface-capture') as SimFaceCapture;
+    element.embedded = true;
+    element.captureLabel = 'Snap photo';
+    element.retakeLabel = 'Use camera again';
+    element.confirmLabel = 'Submit photo';
+    element.retryLabel = 'Restart capture';
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    element.active = true;
+    await element.updateComplete;
+    await flushMicrotasks(10);
+
+    const video = element.shadowRoot?.querySelector('#embedded-video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    if (!video) {
+      throw new Error('Embedded video was not rendered.');
+    }
+
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+    video.dispatchEvent(new Event('loadedmetadata'));
+    await flushMicrotasks(10);
+    await element.updateComplete;
+
+    const captureButton = element.shadowRoot?.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+    expect(captureButton?.textContent).toBe('Snap photo');
+    captureButton?.click();
+    await flushMicrotasks(10);
+    await element.updateComplete;
+
+    const retakeButton = element.shadowRoot?.querySelector('[data-simface-action="retake"]') as HTMLButtonElement | null;
+    const confirmButton = element.shadowRoot?.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+    expect(retakeButton?.textContent).toBe('Use camera again');
+    expect(confirmButton?.textContent).toBe('Submit photo');
+
+    setMediaDevices({
+      getUserMedia: vi.fn().mockRejectedValue(new Error('camera unavailable')),
+    } as unknown as MediaDevices);
+    retakeButton?.click();
+    await flushMicrotasks(10);
+    await element.updateComplete;
+
+    const retryButton = element.shadowRoot?.querySelector('[data-simface-action="retry"]') as HTMLButtonElement | null;
+    expect(retryButton?.textContent).toBe('Restart capture');
+  });
+
   it('captures inline and emits the confirmed blob in embedded mode', async () => {
     const stop = vi.fn();
     setMediaDevices({

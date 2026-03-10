@@ -10,7 +10,7 @@ The backend API, infrastructure, and TensorFlow Lite runtime live in the separat
 
 The capture flow is planned explicitly as: auto camera -> manual camera -> media picker. The primary API supports two UI modes:
 - popup capture: the SDK opens and manages its own modal capture flow
-- embedded capture: the SDK runs capture inside a host-provided `simface-capture` element or container
+- embedded capture: the SDK runs capture inside a host-provided `simface-capture` element
 
 ## Quick Start
 
@@ -81,100 +81,69 @@ if (result.match) {
 
 `enroll()` and `verify()` are the main SDK entry points. They both use the same capture workflow and backend API. The only UI difference is where the capture UI is rendered.
 
+Both functions now accept two optional configuration objects:
+- `workflowOptions`: capture behavior that applies to both popup and embedded flows
+- `captureOptions`: embedded `simface-capture` settings; if this object is present, the SDK uses embedded mode
+
 #### Popup capture
 
-If you omit embedded configuration, the SDK opens its popup capture UI:
+If you omit `captureOptions`, the SDK opens its popup capture UI:
 
 ```javascript
-const captureOptions = {
+const workflowOptions = {
   capturePreference: 'auto-preferred',
   allowMediaPickerFallback: true,
-  label: 'Take a selfie for verification',
-  confirmLabel: 'Use this photo',
 };
 
-const enrollResult = await enroll(config, 'unique-user-id', captureOptions);
-const verifyResult = await verify(config, 'unique-user-id', captureOptions);
+const enrollResult = await enroll(config, 'unique-user-id', workflowOptions);
+const verifyResult = await verify(config, 'unique-user-id', workflowOptions);
 ```
 
 #### Embedded capture
 
-If you want capture inline in your page, pass embedded configuration. The SDK still owns the capture lifecycle; it just renders the UI inline instead of in a popup.
+If you want capture inline in your page, create a `simface-capture` element and pass it as `captureOptions.component`. The SDK still owns the capture lifecycle; it just renders the UI inline instead of in a popup.
 
 ```javascript
-const captureOptions = {
-  // Current API: embedded mode is enabled explicitly.
-  presentation: 'embedded',
-
-  // 'auto-preferred' (default) uses automatic face-framing capture when supported,
-  // falling back to manual shutter. 'manual-only' always shows a manual shutter button.
+const workflowOptions = {
   capturePreference: 'auto-preferred',
-
-  // When true (default), falls back to the device media/file picker if camera access
-  // is unavailable (e.g. denied permissions, or WhatsApp in-app browser).
   allowMediaPickerFallback: true,
-
-  // Specifies the host container element for embedded capture.
-  // This may be a CSS selector string or an HTMLElement.
-  container: '#capture-slot',
-
-  // Optional UI label overrides.
-  label: 'Take a selfie for verification',
-  confirmLabel: 'Use this photo',
 };
 
-const enrollResult = await enroll(config, 'unique-user-id', captureOptions);
-const verifyResult = await verify(config, 'unique-user-id', captureOptions);
+const captureElement = document.querySelector('simface-capture');
+const captureOptions = {
+  component: captureElement,
+  label: 'Take a selfie for verification',
+  captureLabel: 'Snap photo',
+  retakeLabel: 'Take another',
+  confirmLabel: 'Use this photo',
+  retryLabel: 'Start over',
+};
+
+const enrollResult = await enroll(config, 'unique-user-id', workflowOptions, captureOptions);
+const verifyResult = await verify(config, 'unique-user-id', workflowOptions, captureOptions);
 ```
 
-| Option | Type | Default | Notes |
+| workflowOptions | Type | Default | Notes |
 |--------|------|---------|-------|
-| `presentation` | `'popup' \| 'embedded'` | `'popup'` | Selects whether the SDK renders capture in a popup or inline |
 | `capturePreference` | `'auto-preferred' \| 'manual-only'` | `'auto-preferred'` | Controls auto vs manual shutter |
 | `allowMediaPickerFallback` | `boolean` | `true` | Falls back to file picker if camera is unavailable |
-| `container` | `HTMLElement \| string` | — | Required when `presentation` is `'embedded'` |
+
+| captureOptions | Type | Default | Notes |
+|--------|------|---------|-------|
+| `component` | `SimFaceCaptureElement` | — | Existing `simface-capture` element used for embedded capture |
 | `label` | `string` | `'Capturing Face'` | Primary instructional text shown by the capture UI |
-| `confirmLabel` | `string` | `'Accept'` | Confirm button label in preview state |
-
-#### How the embedded flow works
-
-When `presentation: 'embedded'` is provided with a `container`:
-1. the host calls `enroll()` or `verify()`
-2. the SDK resolves the container
-3. the SDK finds or creates a `simface-capture` component inside that container
-4. the SDK starts capture and listens for capture events
-5. the SDK submits the confirmed image to the backend API
-
-When popup mode is used:
-1. the host calls `enroll()` or `verify()`
-2. the SDK opens its popup capture UI
-3. the SDK starts capture and listens for capture events
-4. the SDK submits the confirmed image to the backend API
-
-Today, popup vs embedded is selected with `presentation`. The host still uses the same top-level API either way; only the rendering mode changes.
-
-## Try the local demo
-
-Build the SDK at the repository root, then run the demo:
-
-```bash
-npm install
-npm run build
-
-cd demo
-npm install
-npm run dev
-```
-
-The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
+| `captureLabel` | `string` | `'Take photo'` | Manual capture button label |
+| `retakeLabel` | `string` | `'Retake'` | Preview retake button label |
+| `confirmLabel` | `string` | `'Accept'` | Preview confirm button label |
+| `retryLabel` | `string` | `'Try again'` | Error-state retry button label |
 
 ## API Reference
 
 ### Primary SDK API
 
 The main integration surface is:
-- `enroll(config, clientId, captureOptions?)`
-- `verify(config, clientId, captureOptions?)`
+- `enroll(config, clientId, workflowOptions?, captureOptions?)`
+- `verify(config, clientId, workflowOptions?, captureOptions?)`
 
 These functions:
 - run the camera capture workflow
@@ -182,7 +151,7 @@ These functions:
 - perform face quality validation
 - call the backend API for enrollment or verification
 
-### `enroll(config, clientId, captureOptions?): Promise<EnrollResult>`
+### `enroll(config, clientId, workflowOptions?, captureOptions?): Promise<EnrollResult>`
 
 Opens the camera, captures a face image with quality validation, and enrolls the user.
 
@@ -192,7 +161,8 @@ Parameters:
 |-----------|------|-------------|
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
-| `captureOptions` | `SimFaceCaptureOptions` | Optional capture behavior and embedded container overrides |
+| `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
+| `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
 
 Returns `EnrollResult`:
 ```typescript
@@ -204,7 +174,7 @@ Returns `EnrollResult`:
 }
 ```
 
-### `verify(config, clientId, captureOptions?): Promise<VerifyResult>`
+### `verify(config, clientId, workflowOptions?, captureOptions?): Promise<VerifyResult>`
 
 Opens the camera, captures a face image, and verifies against the enrolled face.
 
@@ -214,7 +184,8 @@ Parameters:
 |-----------|------|-------------|
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
-| `captureOptions` | `SimFaceCaptureOptions` | Optional capture behavior and embedded container overrides |
+| `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
+| `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
 
 Returns `VerifyResult`:
 ```typescript
@@ -240,6 +211,11 @@ At a high level:
 - `enroll()` and `verify()` = capture UI + quality checks + backend submission
 - `SimFaceAPIClient` = backend submission only
 
+`SimFaceAPIClient` maps directly to the backend REST interface:
+- `validateAPIKey()` -> `POST /api/v1/auth/validate`
+- `enroll(clientId, imageBlob)` -> `POST /api/v1/enroll`
+- `verify(clientId, imageBlob)` -> `POST /api/v1/verify`
+
 ## Advanced: Direct `simface-capture` control
 
 Use the `simface-capture` Web Component directly when you want the host application to manage capture state itself instead of letting `enroll()` or `verify()` orchestrate it.
@@ -249,6 +225,10 @@ Use the `simface-capture` Web Component directly when you want the host applicat
   embedded
   capture-preference="auto-preferred"
   label="Take a selfie for verification"
+  capture-label="Snap photo"
+  retake-label="Take another"
+  confirm-label="Use this photo"
+  retry-label="Start over"
 ></simface-capture>
 
 <script type="module">
@@ -292,9 +272,12 @@ This is more flexible, but it also means the host owns more of the workflow.
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `label` | String | `"Capturing Face"` | Instructional text shown on the capture button |
+| `label` | String | `"Capturing Face"` | Primary instructional text shown by the component |
 | `embedded` | Boolean | `false` | Runs the component inline instead of delegating to the popup capture service |
+| `capture-label` | String | `"Take photo"` | Manual capture button label |
+| `retake-label` | String | `"Retake"` | Preview retake button label |
 | `confirm-label` | String | `"Accept"` | Confirm button label used in preview state |
+| `retry-label` | String | `"Try again"` | Error-state retry button label |
 | `capture-preference` | `"auto-preferred" \| "manual-only"` | `"auto-preferred"` | Whether auto capture should be preferred or disabled |
 | `allow-media-picker-fallback` | Boolean | `true` | Whether the component may fall back to the media picker if camera capture is unavailable |
 
@@ -316,16 +299,25 @@ This is more flexible, but it also means the host owns more of the workflow.
 }
 ```
 
+### `SimFaceWorkflowOptions`
+
+```typescript
+{
+  capturePreference?: 'auto-preferred' | 'manual-only';
+  allowMediaPickerFallback?: boolean;
+}
+```
+
 ### `SimFaceCaptureOptions`
 
 ```typescript
 {
-  presentation?: 'popup' | 'embedded';
-  capturePreference?: 'auto-preferred' | 'manual-only';
-  allowMediaPickerFallback?: boolean;
-  container?: HTMLElement | string;
-  label?: string;
-  confirmLabel?: string;
+    component: SimFaceCaptureElement;
+    label ? : string;
+    captureLabel ? : string;
+    retakeLabel ? : string;
+    confirmLabel ? : string;
+    retryLabel ? : string;
 }
 ```
 
@@ -378,3 +370,18 @@ If a check fails, the user is prompted with specific guidance and asked to retak
 | Samsung Internet | Yes | Yes |
 
 > Note: In WhatsApp's in-app browser, the camera opens via the device's native camera app rather than an in-browser preview. Face quality checks run after the photo is taken.
+
+## Try the local demo
+
+Build the SDK at the repository root, then run the demo:
+
+```bash
+npm install
+npm run build
+
+cd demo
+npm install
+npm run dev
+```
+
+The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.

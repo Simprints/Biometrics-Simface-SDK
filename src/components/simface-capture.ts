@@ -9,8 +9,11 @@ import {
   buildCapturePlan,
   normalizeCaptureOptions,
   resolveCaptureCapabilities,
+  DEFAULT_CAPTURE_LABEL,
   DEFAULT_LABEL,
   DEFAULT_CONFIRM_LABEL,
+  DEFAULT_RETAKE_LABEL,
+  DEFAULT_RETRY_LABEL,
   type CapturePlanStep,
 } from '../shared/capture-flow.js';
 import {
@@ -43,6 +46,9 @@ export class SimFaceCapture extends LitElement {
   @property({ type: Boolean, reflect: true }) embedded = false;
   @property({ type: Boolean, reflect: true }) active = false;
   @property({ type: String, attribute: 'confirm-label' }) confirmLabel = DEFAULT_CONFIRM_LABEL;
+  @property({ type: String, attribute: 'capture-label' }) captureLabel = DEFAULT_CAPTURE_LABEL;
+  @property({ type: String, attribute: 'retake-label' }) retakeLabel = DEFAULT_RETAKE_LABEL;
+  @property({ type: String, attribute: 'retry-label' }) retryLabel = DEFAULT_RETRY_LABEL;
   @property({ type: String, attribute: 'capture-preference' })
   capturePreference: CapturePreference = 'auto-preferred';
   @property({ type: Boolean, attribute: 'allow-media-picker-fallback' })
@@ -408,13 +414,13 @@ export class SimFaceCapture extends LitElement {
         ${this.captureState === 'live'
           ? html`
               ${this.captureMode === 'manual'
-                ? html`<button class="btn btn-primary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>Take photo</button>`
+                ? html`<button class="btn btn-primary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>${this.captureLabel}</button>`
                 : ''}
             `
           : ''}
         ${this.captureState === 'preview'
           ? html`
-              <button class="btn btn-retake" data-simface-action="retake" @click=${this.handleRetake}>Retake</button>
+              <button class="btn btn-retake" data-simface-action="retake" @click=${this.handleRetake}>${this.retakeLabel}</button>
               ${this.qualityResult?.passesQualityChecks === false
                 ? ''
                 : html`<button class="btn btn-confirm" data-simface-action="confirm" @click=${this.handleConfirm}>${this.confirmLabel}</button>`}
@@ -422,7 +428,7 @@ export class SimFaceCapture extends LitElement {
           : ''}
         ${this.captureState === 'error'
           ? html`
-              <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>Try again</button>
+              <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>${this.retryLabel}</button>
             `
           : ''}
       </div>
@@ -441,11 +447,15 @@ export class SimFaceCapture extends LitElement {
     this.feedbackTone = 'neutral';
 
     const options = normalizeCaptureOptions({
-      presentation: 'embedded',
       capturePreference: this.capturePreference,
       allowMediaPickerFallback: this.allowMediaPickerFallback,
+    }, {
+      component: this,
       label: this.label,
       confirmLabel: this.confirmLabel,
+      captureLabel: this.captureLabel,
+      retakeLabel: this.retakeLabel,
+      retryLabel: this.retryLabel,
     });
     const capabilities = await resolveCaptureCapabilities({
       capturePreference: options.capturePreference,

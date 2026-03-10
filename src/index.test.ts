@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SimFaceCaptureElement } from './types/index.js';
 
 const captureMocks = vi.hoisted(() => ({
   captureFromCamera: vi.fn(),
@@ -46,10 +47,12 @@ describe('SDK entrypoints', () => {
 
   it('passes capture options through enroll() before uploading the confirmed blob', async () => {
     const blob = new Blob(['capture'], { type: 'image/jpeg' });
-    const captureOptions = {
-      presentation: 'embedded' as const,
-      container: '#capture-slot',
+    const workflowOptions = {
       capturePreference: 'manual-only' as const,
+    };
+    const captureComponent = document.createElement('simface-capture') as SimFaceCaptureElement;
+    const captureOptions = {
+      component: captureComponent,
     };
 
     captureMocks.captureFromCamera.mockResolvedValue(blob);
@@ -58,9 +61,9 @@ describe('SDK entrypoints', () => {
       clientId: 'user-1',
     });
 
-    const result = await enroll(config, 'user-1', captureOptions);
+    const result = await enroll(config, 'user-1', workflowOptions, captureOptions);
 
-    expect(captureMocks.captureFromCamera).toHaveBeenCalledWith(captureOptions);
+    expect(captureMocks.captureFromCamera).toHaveBeenCalledWith(workflowOptions, captureOptions);
     expect(apiClientMethodMocks.validateAPIKey).toHaveBeenCalledTimes(1);
     expect(apiClientMethodMocks.enroll).toHaveBeenCalledWith('user-1', blob);
     expect(result).toEqual({
@@ -73,7 +76,6 @@ describe('SDK entrypoints', () => {
     captureMocks.captureFromCamera.mockResolvedValue(null);
 
     const result = await verify(config, 'user-1', {
-      presentation: 'popup',
       capturePreference: 'auto-preferred',
     });
 
