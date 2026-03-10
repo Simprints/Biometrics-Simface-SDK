@@ -50,7 +50,7 @@ updateCaptureCardVisibility();
 function initializeCaptureComponent() {
   captureElement.embedded = true;
   captureElement.active = false;
-  captureElement.confirmLabel = 'Confirm capture';
+  captureElement.confirmLabel = 'Accept';
 }
 
 function loadConfig() {
@@ -149,11 +149,13 @@ async function runAction(action, executor) {
   appendLog('info', describeActionStart(action));
 
   try {
+    const t0 = performance.now();
     const result = await executor(config);
+    const latencyMs = Math.round(performance.now() - t0);
     const summary = summarizeActionResult(action, result);
     setStatus(summary.kind, summary.message);
-    setResult({ action, ok: true, result });
-    appendLog(summary.logKind, summary.message, result);
+    setResult({ action, ok: true, result, latencyMs });
+    appendLog(summary.logKind, summary.message, result, { label: 'api', ms: latencyMs });
   } catch (error) {
     const message = describeError(error);
     setStatus('error', message);
@@ -190,7 +192,7 @@ function startEmbeddedCapture(action, config) {
 
   captureElement.embedded = true;
   captureElement.label = `Capture a face for ${action}.`;
-  captureElement.confirmLabel = `Confirm ${action}`;
+  captureElement.confirmLabel = 'Accept';
   void captureElement.startCapture();
 
   setBusy(action, true);
@@ -207,14 +209,16 @@ async function startPopupCapture(action, config) {
   appendLog('info', `${capitalize(action)} flow started in popup mode.`);
 
   try {
+    const t0 = performance.now();
     const result = action === 'enroll'
       ? await sdkEnroll(sdkConfig, config.clientId, captureOptions)
       : await sdkVerify(sdkConfig, config.clientId, captureOptions);
+    const latencyMs = Math.round(performance.now() - t0);
 
     const summary = summarizeActionResult(action, result);
     setStatus(summary.kind, summary.message);
-    setResult({ action, ok: true, result });
-    appendLog(summary.logKind, `${summary.message} Capture was completed via popup.`, result);
+    setResult({ action, ok: true, result, latencyMs });
+    appendLog(summary.logKind, `${summary.message} Capture was completed via popup.`, result, { label: 'flow', ms: latencyMs });
   } catch (error) {
     const message = describeError(error);
     setStatus('error', message);
@@ -239,14 +243,16 @@ async function handleComponentCaptured(event) {
 
   try {
     const client = new SimFaceAPIClient(config);
+    const t0 = performance.now();
     const result = action === 'enroll'
       ? await client.enroll(config.clientId, imageBlob)
       : await client.verify(config.clientId, imageBlob);
+    const latencyMs = Math.round(performance.now() - t0);
 
     const summary = summarizeActionResult(action, result);
     setStatus(summary.kind, summary.message);
-    setResult({ action, ok: true, result });
-    appendLog(summary.logKind, `${summary.message} Capture was completed by the SDK component.`, result);
+    setResult({ action, ok: true, result, latencyMs });
+    appendLog(summary.logKind, `${summary.message} Capture was completed by the SDK component.`, result, { label: 'api', ms: latencyMs });
   } catch (error) {
     const message = describeError(error);
     setStatus('error', message);
@@ -291,7 +297,7 @@ function resetActionSession() {
   actionSession.submitting = false;
   captureElement.active = false;
   captureElement.label = 'Choose Enroll or Verify to begin capture.';
-  captureElement.confirmLabel = 'Confirm capture';
+  captureElement.confirmLabel = 'Accept';
 }
 
 function handleActionError(action, error, statusMessage) {
@@ -318,7 +324,7 @@ function setResult(payload) {
   resultOutput.textContent = JSON.stringify(payload, null, 2);
 }
 
-function appendLog(kind, message, details) {
+function appendLog(kind, message, details, latency) {
   const emptyItem = eventLog.querySelector('.event-log-empty');
   if (emptyItem) {
     emptyItem.remove();
@@ -328,8 +334,9 @@ function appendLog(kind, message, details) {
   item.className = `event-item event-item-${kind}`;
 
   const timestamp = new Date().toLocaleTimeString();
+  const latencyText = latency ? ` (${latency.label}: ${latency.ms}ms)` : '';
   const detailText = details ? `\n${JSON.stringify(details, null, 2)}` : '';
-  item.textContent = `[${timestamp}] ${message}${detailText}`;
+  item.textContent = `[${timestamp}] ${message}${latencyText}${detailText}`;
 
   eventLog.prepend(item);
 }
