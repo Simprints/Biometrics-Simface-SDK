@@ -92,9 +92,9 @@ if (result.match) {
 
 `enroll()` and `verify()` are the main SDK entry points. They both use the same capture workflow and backend API. The only UI difference is where the capture UI is rendered.
 
-Both functions now accept two optional configuration objects:
-- `workflowOptions`: capture behavior that applies to both popup and embedded flows
-- `captureElement`: an existing `simface-capture` element; if this argument is present, the SDK uses embedded mode
+Both functions accept:
+- `workflowOptions`: optional capture behavior that applies to both popup and embedded flows
+- `captureElement`: optional existing `simface-capture` element; if this argument is present, the SDK uses embedded mode
 
 #### Popup capture
 
@@ -116,13 +116,13 @@ If you want capture inline in your page, create a `simface-capture` element and 
 
 ```html
 <simface-capture
-        embedded
-        capture-preference="auto-preferred"
-        label="Take a selfie for verification"
-        capture-label="Snap photo"
-        retake-label="Take another"
-        confirm-label="Use this photo"
-        retry-label="Start over"
+  embedded
+  capture-preference="auto-preferred"
+  label="Take a selfie for verification"
+  capture-label="Snap photo"
+  retake-label="Take another"
+  confirm-label="Use this photo"
+  retry-label="Start over"
 ></simface-capture>
 ```
 
@@ -169,6 +169,7 @@ Parameters:
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
+
 Returns: `EnrollResult`
 
 ### `verify(config, clientId, workflowOptions?, captureElement?): Promise<VerifyResult>`
@@ -183,6 +184,7 @@ Parameters:
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
+
 Returns: `VerifyResult`
 
 ### `SimFaceAPIClient` and the backend REST interface
@@ -281,7 +283,7 @@ This is more flexible, but it also means the host owns more of the workflow.
 ### `SimFaceConfig`
 
 ```typescript
-{
+interface SimFaceConfig {
   apiUrl: string;
   projectId: string;
   apiKey: string;
@@ -291,7 +293,7 @@ This is more flexible, but it also means the host owns more of the workflow.
 ### `SimFaceWorkflowOptions`
 
 ```typescript
-{
+interface SimFaceWorkflowOptions {
   capturePreference?: 'auto-preferred' | 'manual-only';
   allowMediaPickerFallback?: boolean;
 }
@@ -300,7 +302,7 @@ This is more flexible, but it also means the host owns more of the workflow.
 ### `EnrollResult`
 
 ```typescript
-{
+interface EnrollResult {
   success: boolean;
   clientId: string;
   message?: string;
@@ -311,7 +313,7 @@ This is more flexible, but it also means the host owns more of the workflow.
 ### `VerifyResult`
 
 ```typescript
-{
+interface VerifyResult {
   match: boolean;
   score: number;
   threshold: number;
