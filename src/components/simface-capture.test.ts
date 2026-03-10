@@ -235,7 +235,8 @@ describe('<simface-capture>', () => {
   });
 
   it('declares color-scheme light to prevent iOS dark-mode flicker', () => {
-    const cssText = (SimFaceCapture as unknown as { styles: { cssText: string } }).styles.cssText;
+    // Lit CSSResult.toString() returns the raw CSS text
+    const cssText = String(SimFaceCapture.styles);
     expect(cssText).toContain('color-scheme: light');
   });
 
