@@ -150,6 +150,40 @@ describe('camera service', () => {
       expect(stop).toHaveBeenCalled();
     });
 
+    it('sets color-scheme light on the popup overlay to prevent iOS dark-mode flicker', async () => {
+      setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
+
+      const stop = vi.fn();
+      const getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      } as unknown as MediaStream);
+
+      setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+      faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult());
+
+      const capturePromise = captureFromCamera();
+      await flushMicrotasks(20);
+
+      const overlay = document.querySelector('[data-simface-camera-overlay]') as HTMLElement | null;
+      expect(overlay).not.toBeNull();
+      expect(overlay?.style.colorScheme).toBe('light');
+
+      // Clean up: cancel the capture
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
+      if (video) {
+        Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+        Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+        video.dispatchEvent(new Event('loadedmetadata'));
+        await flushMicrotasks(10);
+      }
+      await component.updateComplete;
+      const cancelButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="cancel"]');
+      cancelButton?.dispatchEvent(new MouseEvent('click'));
+      await capturePromise;
+    });
+
     it('falls back to manual capture when realtime guidance is unavailable', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
 
