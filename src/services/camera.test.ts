@@ -78,16 +78,14 @@ describe('camera service', () => {
         confirmLabel: string;
       };
       document.body.appendChild(component);
+      component.label = 'Position your face';
+      component.captureLabel = 'Snap photo';
+      component.retakeLabel = 'Try another';
+      component.confirmLabel = 'Use image';
 
       const capturePromise = captureFromCamera(
         { capturePreference: 'manual-only' },
-        {
-          component,
-          label: 'Position your face',
-          captureLabel: 'Snap photo',
-          retakeLabel: 'Try another',
-          confirmLabel: 'Use image',
-        },
+        { component },
       );
       await flushMicrotasks(10);
       await component.updateComplete;

@@ -1,16 +1,11 @@
 import { getVideoDetector } from '../services/face-detection.js';
 import type {
   CapturePreference,
-  SimFaceCaptureOptions,
   SimFaceCaptureElement,
   SimFaceWorkflowOptions,
 } from '../types/index.js';
 
 export type CapturePlanStep = 'auto-camera' | 'manual-camera' | 'media-picker';
-
-type CaptureUiOptions = Partial<SimFaceCaptureOptions> & {
-  component?: SimFaceCaptureElement;
-};
 
 export interface NormalizedCaptureOptions {
   capturePreference: CapturePreference;
@@ -42,17 +37,17 @@ export const DEFAULT_RETRY_LABEL = 'Try again';
 
 export function normalizeCaptureOptions(
   workflowOptions: SimFaceWorkflowOptions | undefined,
-  captureOptions?: CaptureUiOptions,
+  component?: SimFaceCaptureElement,
 ): NormalizedCaptureOptions {
   return {
     capturePreference: workflowOptions?.capturePreference ?? 'auto-preferred',
     allowMediaPickerFallback: workflowOptions?.allowMediaPickerFallback ?? true,
-    component: captureOptions?.component,
-    label: captureOptions?.label ?? DEFAULT_LABEL,
-    confirmLabel: captureOptions?.confirmLabel ?? DEFAULT_CONFIRM_LABEL,
-    captureLabel: captureOptions?.captureLabel ?? DEFAULT_CAPTURE_LABEL,
-    retakeLabel: captureOptions?.retakeLabel ?? DEFAULT_RETAKE_LABEL,
-    retryLabel: captureOptions?.retryLabel ?? DEFAULT_RETRY_LABEL,
+    component,
+    label: DEFAULT_LABEL,
+    confirmLabel: DEFAULT_CONFIRM_LABEL,
+    captureLabel: DEFAULT_CAPTURE_LABEL,
+    retakeLabel: DEFAULT_RETAKE_LABEL,
+    retryLabel: DEFAULT_RETRY_LABEL,
   };
 }
 

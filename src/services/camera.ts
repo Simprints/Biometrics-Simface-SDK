@@ -30,7 +30,7 @@ export async function captureFromCamera(
   workflowOptions?: SimFaceWorkflowOptions,
   captureOptions?: SimFaceCaptureOptions,
 ): Promise<Blob | null> {
-  const normalizedOptions = normalizeCaptureOptions(workflowOptions, captureOptions);
+  const normalizedOptions = normalizeCaptureOptions(workflowOptions, captureOptions?.component);
 
   if (captureOptions) {
     return captureFromEmbeddedComponent(normalizedOptions);
@@ -62,11 +62,6 @@ async function captureFromEmbeddedComponent(
   const element = resolveEmbeddedCaptureComponent(options.component);
 
   element.embedded = true;
-  element.label = options.label;
-  element.confirmLabel = options.confirmLabel;
-  element.captureLabel = options.captureLabel;
-  element.retakeLabel = options.retakeLabel;
-  element.retryLabel = options.retryLabel;
   element.capturePreference = options.capturePreference;
   element.allowMediaPickerFallback = options.allowMediaPickerFallback;
 

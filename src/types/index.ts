@@ -55,16 +55,6 @@ export interface SimFaceCaptureElement extends HTMLElement {
 export interface SimFaceCaptureOptions {
   /** Existing `simface-capture` element that should host the embedded flow. */
   component: SimFaceCaptureElement;
-  /** Optional capture label override. */
-  label?: string;
-  /** Optional confirm button label override. */
-  confirmLabel?: string;
-  /** Optional manual capture button label override. */
-  captureLabel?: string;
-  /** Optional retake button label override. */
-  retakeLabel?: string;
-  /** Optional retry button label override. */
-  retryLabel?: string;
 }
 
 /** Result of API key validation. */

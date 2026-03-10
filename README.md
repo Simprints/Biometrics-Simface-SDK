@@ -110,13 +110,9 @@ const workflowOptions = {
 };
 
 const captureElement = document.querySelector('simface-capture');
+
 const captureOptions = {
   component: captureElement,
-  label: 'Take a selfie for verification',
-  captureLabel: 'Snap photo',
-  retakeLabel: 'Take another',
-  confirmLabel: 'Use this photo',
-  retryLabel: 'Start over',
 };
 
 const enrollResult = await enroll(config, 'unique-user-id', workflowOptions, captureOptions);
@@ -131,11 +127,6 @@ const verifyResult = await verify(config, 'unique-user-id', workflowOptions, cap
 | captureOptions | Type | Default | Notes |
 |--------|------|---------|-------|
 | `component` | `SimFaceCaptureElement` | — | Existing `simface-capture` element used for embedded capture |
-| `label` | `string` | `'Capturing Face'` | Primary instructional text shown by the capture UI |
-| `captureLabel` | `string` | `'Take photo'` | Manual capture button label |
-| `retakeLabel` | `string` | `'Retake'` | Preview retake button label |
-| `confirmLabel` | `string` | `'Accept'` | Preview confirm button label |
-| `retryLabel` | `string` | `'Try again'` | Error-state retry button label |
 
 ## API Reference
 
@@ -199,7 +190,7 @@ At a high level:
 
 ## Advanced: Direct `simface-capture` control
 
-Use the `simface-capture` Web Component directly when you want the host application to manage capture state itself instead of letting `enroll()` or `verify()` orchestrate it.
+Use the `simface-capture` Web Component directly when you want the host application to manage capture state itself instead of letting `enroll()` or `verify()` orchestrate it. In this mode, the component is also the source of truth for embedded UI copy.
 
 ```html
 <simface-capture
@@ -296,11 +287,6 @@ This is more flexible, but it also means the host owns more of the workflow.
 ```typescript
 {
   component: SimFaceCaptureElement;
-  label?: string;
-  captureLabel?: string;
-  retakeLabel?: string;
-  confirmLabel?: string;
-  retryLabel?: string;
 }
 ```
 

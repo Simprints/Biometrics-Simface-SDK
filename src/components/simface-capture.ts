@@ -449,14 +449,12 @@ export class SimFaceCapture extends LitElement {
     const options = normalizeCaptureOptions({
       capturePreference: this.capturePreference,
       allowMediaPickerFallback: this.allowMediaPickerFallback,
-    }, {
-      component: this,
-      label: this.label,
-      confirmLabel: this.confirmLabel,
-      captureLabel: this.captureLabel,
-      retakeLabel: this.retakeLabel,
-      retryLabel: this.retryLabel,
-    });
+    }, this);
+    options.label = this.label;
+    options.confirmLabel = this.confirmLabel;
+    options.captureLabel = this.captureLabel;
+    options.retakeLabel = this.retakeLabel;
+    options.retryLabel = this.retryLabel;
     const capabilities = await resolveCaptureCapabilities({
       capturePreference: options.capturePreference,
     });
