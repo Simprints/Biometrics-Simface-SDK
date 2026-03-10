@@ -1,17 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const cameraMocks = vi.hoisted(() => ({
-  blobToImage: vi.fn(),
-  captureFromCamera: vi.fn(),
-}));
-
 const faceDetectionMocks = vi.hoisted(() => ({
   assessFaceQuality: vi.fn(),
   assessFaceQualityForVideo: vi.fn(),
   getVideoDetector: vi.fn(),
 }));
 
-vi.mock('../services/camera.js', () => cameraMocks);
 vi.mock('../services/face-detection.js', () => faceDetectionMocks);
 
 import './simface-capture.js';
@@ -44,8 +38,6 @@ describe('<simface-capture>', () => {
     window.clearTimeout = originalClearTimeout;
     URL.createObjectURL = vi.fn(() => 'blob:preview');
     URL.revokeObjectURL = vi.fn();
-    cameraMocks.blobToImage.mockReset();
-    cameraMocks.captureFromCamera.mockReset();
     faceDetectionMocks.assessFaceQuality.mockReset();
     faceDetectionMocks.assessFaceQualityForVideo.mockReset();
     faceDetectionMocks.getVideoDetector.mockReset();
@@ -63,20 +55,110 @@ describe('<simface-capture>', () => {
     setMediaDevices(originalMediaDevices);
   });
 
-  it('dispatches simface-cancelled when popup capture returns null', async () => {
-    cameraMocks.captureFromCamera.mockResolvedValue(null);
+  it('dispatches simface-cancelled when the cancel button is clicked during capture', async () => {
+    const stop = vi.fn();
+    setMediaDevices({
+      getUserMedia: vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      }),
+    } as unknown as MediaDevices);
+    faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
 
     const element = document.createElement('simface-capture') as SimFaceCapture;
+    element.embedded = true;
     const cancelledListener = vi.fn();
     element.addEventListener('simface-cancelled', cancelledListener);
     document.body.appendChild(element);
     await element.updateComplete;
 
-    const button = element.shadowRoot?.querySelector('.btn-primary') as HTMLButtonElement | null;
-    button?.click();
+    element.active = true;
+    await element.updateComplete;
+    await flushMicrotasks(10);
+
+    const video = element.shadowRoot?.querySelector('#embedded-video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    if (video) {
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks(10);
+    }
+
+    const cancelButton = element.shadowRoot?.querySelector('[data-simface-action="cancel"]') as HTMLButtonElement | null;
+    expect(cancelButton).not.toBeNull();
+    cancelButton?.click();
     await flushMicrotasks();
 
     expect(cancelledListener).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalled();
+  });
+
+  it('shows take photo button only in manual mode', async () => {
+    const stop = vi.fn();
+    setMediaDevices({
+      getUserMedia: vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      }),
+    } as unknown as MediaDevices);
+
+    // First test: auto mode — no capture button
+    faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+    faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult());
+
+    const element = document.createElement('simface-capture') as SimFaceCapture;
+    element.embedded = true;
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    element.active = true;
+    await element.updateComplete;
+    await flushMicrotasks(10);
+
+    const video = element.shadowRoot?.querySelector('#embedded-video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    if (video) {
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks(10);
+      await element.updateComplete;
+    }
+
+    const captureButton = element.shadowRoot?.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+    expect(captureButton).toBeNull();
+
+    // Cleanup for second test
+    element.active = false;
+    await element.updateComplete;
+    await flushMicrotasks();
+    element.remove();
+
+    // Second test: manual mode — capture button visible
+    faceDetectionMocks.getVideoDetector.mockReset();
+    faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
+
+    const element2 = document.createElement('simface-capture') as SimFaceCapture;
+    element2.embedded = true;
+    document.body.appendChild(element2);
+    await element2.updateComplete;
+
+    element2.active = true;
+    await element2.updateComplete;
+    await flushMicrotasks(10);
+
+    const video2 = element2.shadowRoot?.querySelector('#embedded-video') as HTMLVideoElement | null;
+    expect(video2).not.toBeNull();
+    if (video2) {
+      Object.defineProperty(video2, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video2, 'videoHeight', { configurable: true, value: 480 });
+      video2.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks(10);
+      await element2.updateComplete;
+    }
+
+    const captureButton2 = element2.shadowRoot?.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+    expect(captureButton2).not.toBeNull();
+    expect(captureButton2?.textContent).toBe('Take photo');
   });
 
   it('captures inline and emits the confirmed blob in embedded mode', async () => {
@@ -106,7 +188,6 @@ describe('<simface-capture>', () => {
       message: 'Hold still. Capturing automatically...',
     }));
     faceDetectionMocks.getVideoDetector.mockResolvedValue({});
-    cameraMocks.blobToImage.mockResolvedValue({ naturalWidth: 640, naturalHeight: 480 });
     faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
 
     const element = document.createElement('simface-capture') as SimFaceCapture;

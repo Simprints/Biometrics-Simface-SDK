@@ -1,6 +1,5 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
-import { captureFromCamera } from '../services/camera.js';
 import { assessFaceQuality } from '../services/face-detection.js';
 import {
   CAPTURE_GUIDE_MASK_PATH,
@@ -15,6 +14,7 @@ import {
 import {
   CameraCaptureSessionController,
   type CameraCaptureSessionState,
+  type LiveCaptureMode,
 } from '../shared/capture-session.js';
 import {
   CameraAccessError,
@@ -54,6 +54,7 @@ export class SimFaceCapture extends LitElement {
   @state() private countdownProgress = 0;
   @state() private qualityResult: FaceQualityResult | null = null;
   @state() private canTakePhoto = true;
+  @state() private captureMode: LiveCaptureMode = 'auto';
 
   @query('#embedded-video') private embeddedVideoElement?: HTMLVideoElement;
 
@@ -85,13 +86,13 @@ export class SimFaceCapture extends LitElement {
       background: #fafafa;
     }
 
-    .embedded-shell {
+    .capture-shell {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
 
-    .embedded-copy {
+    .capture-copy {
       margin: 0;
       color: #334155;
     }
@@ -260,11 +261,11 @@ export class SimFaceCapture extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.stopEmbeddedSession();
+    this.stopSession();
   }
 
   updated(changedProperties: Map<string, unknown>) {
-    if (!this.embedded || !changedProperties.has('active') || this.pendingActiveSync) {
+    if (!changedProperties.has('active') || this.pendingActiveSync) {
       return;
     }
 
@@ -272,82 +273,41 @@ export class SimFaceCapture extends LitElement {
     queueMicrotask(() => {
       this.pendingActiveSync = false;
 
-      if (!this.isConnected || !this.embedded) {
+      if (!this.isConnected) {
         return;
       }
 
       if (this.active) {
         if (this.captureState === 'idle') {
-          void this.beginEmbeddedCapture();
+          void this.beginCapture();
         }
         return;
       }
 
-      this.endEmbeddedCapture();
+      this.endCapture();
     });
   }
 
   render() {
-    if (this.embedded) {
-      return html`
-        <div class="container embedded-shell">
-          ${this.renderEmbeddedState()}
-        </div>
-      `;
-    }
-
     return html`
-      <div class="container">
-        ${this.renderPopupState()}
+      <div class="container capture-shell">
+        ${this.renderCaptureState()}
       </div>
     `;
   }
 
   public async startCapture() {
-    if (this.embedded) {
-      this.active = true;
-      await this.updateComplete;
-      await this.beginEmbeddedCapture();
-      return;
-    }
-
-    await this.handlePopupCapture();
+    this.active = true;
+    await this.updateComplete;
+    await this.beginCapture();
   }
 
-  private renderPopupState() {
-    switch (this.captureState) {
-      case 'idle':
-        return html`
-          <p>${this.label}</p>
-          <button class="btn btn-primary" @click=${this.handlePopupCapture}>
-            Open Camera
-          </button>
-        `;
-
-      case 'starting':
-        return html`
-          <p>Opening camera...</p>
-          <div class="spinner"></div>
-        `;
-
-      case 'error':
-        return html`
-          <div class="quality-msg quality-bad">${this.errorMessage}</div>
-          <button class="btn btn-primary" @click=${this.handlePopupRetake}>Try again</button>
-          <button class="btn btn-secondary" @click=${this.handlePopupCancel}>Cancel</button>
-        `;
-
-      default:
-        return html``;
-    }
-  }
-
-  private renderEmbeddedState() {
+  private renderCaptureState() {
     return html`
-      <p class="embedded-copy">${this.label}</p>
+      <p class="capture-copy">${this.label}</p>
 
       ${this.captureState === 'idle'
-        ? html`<p class="embedded-copy">Waiting for the host page to start capture.</p>`
+        ? html`<p class="capture-copy">Waiting for the host page to start capture.</p>`
         : html`
             <div class="stage">
               <video
@@ -382,71 +342,38 @@ export class SimFaceCapture extends LitElement {
       <div class="btn-row">
         ${this.captureState === 'live'
           ? html`
-              <button class="btn btn-secondary" ?disabled=${!this.canTakePhoto} @click=${this.handleEmbeddedManualCapture}>Take photo now</button>
-              <button class="btn btn-ghost" @click=${this.handleEmbeddedCancel}>Cancel</button>
+              ${this.captureMode === 'manual'
+                ? html`<button class="btn btn-secondary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>Take photo</button>`
+                : ''}
+              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
             `
           : ''}
         ${this.captureState === 'preview'
           ? html`
-              <button class="btn btn-secondary" @click=${this.handleEmbeddedRetake}>Retake</button>
+              <button class="btn btn-secondary" data-simface-action="retake" @click=${this.handleRetake}>Retake</button>
               ${this.qualityResult?.passesQualityChecks === false
                 ? ''
-                : html`<button class="btn btn-primary" @click=${this.handleEmbeddedConfirm}>${this.confirmLabel}</button>`}
-              <button class="btn btn-ghost" @click=${this.handleEmbeddedCancel}>Cancel</button>
+                : html`<button class="btn btn-primary" data-simface-action="confirm" @click=${this.handleConfirm}>${this.confirmLabel}</button>`}
+              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
             `
           : ''}
         ${this.captureState === 'error'
           ? html`
-              <button class="btn btn-primary" @click=${this.beginEmbeddedCapture}>Try again</button>
-              <button class="btn btn-ghost" @click=${this.handleEmbeddedCancel}>Cancel</button>
+              <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>Try again</button>
+              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
             `
           : ''}
       </div>
     `;
   }
 
-  private async handlePopupCapture() {
-    this.captureState = 'starting';
-
-    try {
-      const blob = await captureFromCamera({
-        presentation: 'popup',
-        capturePreference: this.capturePreference,
-        allowMediaPickerFallback: this.allowMediaPickerFallback,
-      });
-
-      if (!blob) {
-        this.dispatchCancelled();
-        this.captureState = 'idle';
-        return;
-      }
-
-      this.dispatchCaptured(blob);
-      this.resetPopupState();
-    } catch (err) {
-      this.errorMessage = err instanceof Error ? err.message : 'Capture failed';
-      this.captureState = 'error';
-      this.dispatchError(this.errorMessage);
-    }
-  }
-
-  private handlePopupRetake() {
-    this.resetPopupState();
-    void this.handlePopupCapture();
-  }
-
-  private handlePopupCancel() {
-    this.dispatchCancelled();
-    this.resetPopupState();
-  }
-
-  private async beginEmbeddedCapture() {
+  private async beginCapture() {
     if (!this.active || this.captureState === 'starting' || this.captureState === 'live') {
       return;
     }
 
-    this.stopEmbeddedSession();
-    this.resetEmbeddedState();
+    this.stopSession();
+    this.resetState();
     this.captureState = 'starting';
     this.feedbackMessage = 'Requesting camera access...';
     this.feedbackTone = 'neutral';
@@ -466,7 +393,7 @@ export class SimFaceCapture extends LitElement {
     const hasMediaPickerFallback = plan.steps.includes('media-picker');
 
     if (!cameraStep) {
-      await this.startEmbeddedMediaPicker();
+      await this.startMediaPicker();
       return;
     }
 
@@ -474,24 +401,24 @@ export class SimFaceCapture extends LitElement {
       this.stream = await openUserFacingCameraStream();
     } catch (error) {
       if (error instanceof CameraAccessError && hasMediaPickerFallback) {
-        await this.startEmbeddedMediaPicker();
+        await this.startMediaPicker();
         return;
       }
 
-      this.handleEmbeddedError(error);
+      this.handleCaptureError(error);
       return;
     }
 
     await this.updateComplete;
 
     if (!this.active) {
-      this.stopEmbeddedSession();
+      this.stopSession();
       return;
     }
 
     const video = this.embeddedVideoElement;
     if (!video || !this.stream) {
-      this.handleEmbeddedError(new Error('Inline camera preview could not be created.'));
+      this.handleCaptureError(new Error('Inline camera preview could not be created.'));
       return;
     }
 
@@ -502,9 +429,9 @@ export class SimFaceCapture extends LitElement {
       initialMode: cameraStep === 'auto-camera' ? 'auto' : 'manual',
       copy: {
         autoReadyMessage: 'Center your face in the oval. We will capture automatically when framing looks good.',
-        manualReadyMessage: 'When you are ready, use Take photo now.',
-        autoUnavailableMessage: 'Automatic analysis is unavailable. Use Take photo now.',
-        retakeReadyMessage: 'When you are ready, use Take photo now.',
+        manualReadyMessage: 'When you are ready, press Take photo.',
+        autoUnavailableMessage: 'Automatic capture is unavailable. Press Take photo instead.',
+        retakeReadyMessage: 'When you are ready, press Take photo.',
       },
       onStateChange: (state) => this.applySessionState(state),
     });
@@ -512,12 +439,12 @@ export class SimFaceCapture extends LitElement {
     try {
       await this.sessionController.start();
     } catch (error) {
-      this.handleEmbeddedError(error);
+      this.handleCaptureError(error);
     }
   }
 
-  private async startEmbeddedMediaPicker() {
-    this.stopEmbeddedSession();
+  private async startMediaPicker() {
+    this.stopSession();
     this.currentCaptureStep = 'media-picker';
     this.captureState = 'starting';
     this.feedbackMessage = 'Opening media picker...';
@@ -526,13 +453,13 @@ export class SimFaceCapture extends LitElement {
     try {
       const blob = await captureFromFileInput();
       if (!blob) {
-        this.handleEmbeddedCancel();
+        this.handleCancel();
         return;
       }
 
       await this.showPickedPreview(blob);
     } catch (error) {
-      this.handleEmbeddedError(error);
+      this.handleCaptureError(error);
     }
   }
 
@@ -544,6 +471,7 @@ export class SimFaceCapture extends LitElement {
     this.qualityResult = state.qualityResult;
     this.errorMessage = state.phase === 'error' ? state.errorMessage : '';
     this.canTakePhoto = state.canTakePhoto;
+    this.captureMode = state.mode;
 
     if (state.phase === 'preview') {
       this.capturedBlob = state.previewBlob;
@@ -570,50 +498,50 @@ export class SimFaceCapture extends LitElement {
     this.setPreviewBlob(blob);
   }
 
-  private handleEmbeddedManualCapture() {
+  private handleManualCapture() {
     void this.sessionController?.takePhotoNow().catch((error) => {
-      this.handleEmbeddedError(error);
+      this.handleCaptureError(error);
     });
   }
 
-  private handleEmbeddedRetake() {
+  private handleRetake() {
     this.capturedBlob = null;
     this.qualityResult = null;
     this.clearPreviewUrl();
 
     if (this.currentCaptureStep === 'media-picker') {
       if (this.active) {
-        void this.beginEmbeddedCapture();
+        void this.beginCapture();
       }
       return;
     }
 
     void this.sessionController?.retake().catch((error) => {
-      this.handleEmbeddedError(error);
+      this.handleCaptureError(error);
     });
   }
 
-  private handleEmbeddedConfirm() {
+  private handleConfirm() {
     if (!this.capturedBlob) {
       return;
     }
 
     const blob = this.capturedBlob;
     this.active = false;
-    this.stopEmbeddedSession();
-    this.resetEmbeddedState();
+    this.stopSession();
+    this.resetState();
     this.dispatchCaptured(blob);
   }
 
-  private handleEmbeddedCancel() {
+  private handleCancel() {
     this.active = false;
-    this.stopEmbeddedSession();
-    this.resetEmbeddedState();
+    this.stopSession();
+    this.resetState();
     this.dispatchCancelled();
   }
 
-  private handleEmbeddedError(error: unknown) {
-    this.stopEmbeddedSession();
+  private handleCaptureError(error: unknown) {
+    this.stopSession();
     this.errorMessage = error instanceof Error ? error.message : 'Capture failed';
     this.captureState = 'error';
     this.feedbackMessage = this.errorMessage;
@@ -621,12 +549,12 @@ export class SimFaceCapture extends LitElement {
     this.dispatchError(this.errorMessage);
   }
 
-  private endEmbeddedCapture() {
-    this.stopEmbeddedSession();
-    this.resetEmbeddedState();
+  private endCapture() {
+    this.stopSession();
+    this.resetState();
   }
 
-  private stopEmbeddedSession() {
+  private stopSession() {
     this.sessionController?.stop();
     this.sessionController = null;
     this.currentCaptureStep = null;
@@ -644,7 +572,7 @@ export class SimFaceCapture extends LitElement {
     this.countdownProgress = 0;
   }
 
-  private resetEmbeddedState() {
+  private resetState() {
     this.clearPreviewUrl();
     this.captureState = 'idle';
     this.errorMessage = '';
@@ -653,11 +581,7 @@ export class SimFaceCapture extends LitElement {
     this.countdownProgress = 0;
     this.qualityResult = null;
     this.capturedBlob = null;
-  }
-
-  private resetPopupState() {
-    this.captureState = 'idle';
-    this.errorMessage = '';
+    this.captureMode = 'auto';
   }
 
   private setPreviewBlob(blob: Blob) {

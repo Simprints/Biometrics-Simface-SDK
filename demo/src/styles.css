@@ -100,7 +100,8 @@ h3 {
   color: #0f172a;
 }
 
-.config-form input {
+.config-form input,
+.config-form select {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid #cbd5e1;
@@ -110,7 +111,8 @@ h3 {
   font: inherit;
 }
 
-.config-form input:focus {
+.config-form input:focus,
+.config-form select:focus {
   outline: 2px solid rgba(37, 99, 235, 0.25);
   border-color: #2563eb;
 }
