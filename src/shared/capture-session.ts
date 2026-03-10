@@ -39,7 +39,12 @@ export interface CameraCaptureLiveState extends CameraCaptureStateBase {
   previewBlob: null;
   errorMessage: '';
   canConfirm: false;
-  canTakePhoto: true;
+  /**
+   * `true` when the user may trigger a manual capture; `false` once the
+   * auto-capture countdown has started and the session is about to capture
+   * automatically.
+   */
+  canTakePhoto: boolean;
 }
 
 export interface CameraCapturePreviewState extends CameraCaptureStateBase {
@@ -145,6 +150,14 @@ export class CameraCaptureSessionController {
       return;
     }
 
+    // Switch to manual mode and cancel any pending auto-analysis so that
+    // in-flight runAutoAnalysis / finishAutoCapture calls no-op and cannot
+    // override the preview state after this manual capture completes.
+    if (this.mode === 'auto') {
+      this.mode = 'manual';
+      this.cancelScheduledAnalysis();
+    }
+
     const blob = await this.frameCapture.captureBlob(this.videoElement);
     if (this.stopped) return;
     const qualityResult = await this.assessPreviewBlob(blob);
@@ -218,7 +231,7 @@ export class CameraCaptureSessionController {
       previewBlob: null,
       errorMessage: '',
       canConfirm: false,
-      canTakePhoto: true,
+      canTakePhoto: this.mode !== 'auto' || this.countdownStartedAt === null,
     };
   }
 
@@ -306,6 +319,7 @@ export class CameraCaptureSessionController {
     try {
       const qualityResult = await this.assessLiveQuality(this.videoElement, timestamp);
       if (this.stopped) return;
+      if (this.mode !== 'auto' || this.state.phase !== 'live') return;
 
       if (qualityResult.passesQualityChecks) {
         if (this.countdownStartedAt === null) {
@@ -348,7 +362,9 @@ export class CameraCaptureSessionController {
         }));
       }
     } catch {
-      this.switchToManual();
+      if (!this.stopped && this.mode === 'auto' && this.state.phase === 'live') {
+        this.switchToManual();
+      }
       return;
     } finally {
       this.analysisInFlight = false;
@@ -361,9 +377,9 @@ export class CameraCaptureSessionController {
     const blob = this.frameCapture.hasStoredBestFrame()
       ? await this.frameCapture.storedBestFrameToBlob()
       : await this.frameCapture.captureBlob(this.videoElement);
-    if (this.stopped) return;
+    if (this.stopped || this.mode !== 'auto' || this.state.phase !== 'live') return;
     const qualityResult = this.bestQualityResult ?? await this.assessPreviewBlob(blob);
-    if (this.stopped) return;
+    if (this.stopped || this.mode !== 'auto' || this.state.phase !== 'live') return;
     this.emit(this.createPreviewState(blob, qualityResult, {
       feedbackMessage: autoCaptureCompleteMessage(qualityResult),
       feedbackTone: qualityResult?.passesQualityChecks === false ? 'error' : 'success',

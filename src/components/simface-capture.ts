@@ -53,6 +53,7 @@ export class SimFaceCapture extends LitElement {
   @state() private previewUrl = '';
   @state() private countdownProgress = 0;
   @state() private qualityResult: FaceQualityResult | null = null;
+  @state() private canTakePhoto = true;
 
   @query('#embedded-video') private embeddedVideoElement?: HTMLVideoElement;
 
@@ -381,7 +382,7 @@ export class SimFaceCapture extends LitElement {
       <div class="btn-row">
         ${this.captureState === 'live'
           ? html`
-              <button class="btn btn-secondary" @click=${this.handleEmbeddedManualCapture}>Take photo now</button>
+              <button class="btn btn-secondary" ?disabled=${!this.canTakePhoto} @click=${this.handleEmbeddedManualCapture}>Take photo now</button>
               <button class="btn btn-ghost" @click=${this.handleEmbeddedCancel}>Cancel</button>
             `
           : ''}
@@ -542,6 +543,7 @@ export class SimFaceCapture extends LitElement {
     this.countdownProgress = state.countdownProgress;
     this.qualityResult = state.qualityResult;
     this.errorMessage = state.phase === 'error' ? state.errorMessage : '';
+    this.canTakePhoto = state.canTakePhoto;
 
     if (state.phase === 'preview') {
       this.capturedBlob = state.previewBlob;

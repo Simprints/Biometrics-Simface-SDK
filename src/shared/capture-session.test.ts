@@ -260,3 +260,172 @@ describe('CameraCaptureSessionController.stop()', () => {
     expect(onStateChange).not.toHaveBeenCalled();
   });
 });
+
+describe('CameraCaptureSessionController.takePhotoNow() in auto mode', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    captureRuntimeMocks.createReusableFrameCapture.mockReset();
+    captureRuntimeMocks.resumeVideoPlayback.mockReset();
+    captureRuntimeMocks.waitForVideoReady.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('cancels pending auto-analysis timer when called in auto mode', async () => {
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    const { controller } = makeController({ initialMode: 'auto' });
+    await controller.start();
+    clearTimeoutSpy.mockClear();
+
+    await controller.takePhotoNow();
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+  });
+
+  it('emits a preview state when called in auto mode', async () => {
+    const { controller, onStateChange } = makeController({ initialMode: 'auto' });
+    await controller.start();
+    onStateChange.mockClear();
+
+    await controller.takePhotoNow();
+
+    const states = onStateChange.mock.calls.map(([s]) => s);
+    expect(states.some((s) => s.phase === 'preview')).toBe(true);
+  });
+
+  it('does not let an in-flight runAutoAnalysis override the preview state', async () => {
+    let resolveQuality: ((q: FaceQualityResult) => void) | null = null;
+    const assessLiveQuality = vi.fn().mockReturnValue(
+      new Promise<FaceQualityResult>((r) => { resolveQuality = r; }),
+    );
+
+    const { controller, onStateChange } = makeController({
+      initialMode: 'auto',
+      assessLiveQuality,
+    });
+    await controller.start();
+
+    // Advance timers to start the auto-analysis loop (quality assessment now in-flight).
+    vi.runAllTimers();
+    await vi.runAllTicks();
+
+    // User triggers manual capture while auto-analysis is awaiting.
+    // takePhotoNow() uses the immediately-resolving default mocks, so it finishes first.
+    await controller.takePhotoNow();
+    onStateChange.mockClear();
+
+    // Resolve the pending quality assessment — runAutoAnalysis should now no-op.
+    resolveQuality!(makeQualityResult());
+    await vi.runAllTicks();
+
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
+  it('does not let an in-flight finishAutoCapture override the preview state', async () => {
+    // First analysis passes quality immediately to trigger countdown.
+    const assessLiveQuality = vi.fn().mockResolvedValue(makeQualityResult());
+
+    const frameCaptureMock = makeFrameCaptureMock();
+    let resolveBestBlob: ((b: Blob) => void) | null = null;
+    frameCaptureMock.hasStoredBestFrame.mockReturnValue(true);
+    frameCaptureMock.storedBestFrameToBlob.mockReturnValue(
+      new Promise<Blob>((r) => { resolveBestBlob = r; }),
+    );
+    captureRuntimeMocks.createReusableFrameCapture.mockReturnValue(frameCaptureMock);
+
+    const { controller, onStateChange } = makeController({
+      initialMode: 'auto',
+      assessLiveQuality,
+    });
+    await controller.start();
+
+    // Advance time past countdown to trigger finishAutoCapture (blob resolution pending).
+    vi.advanceTimersByTime(10000);
+    await vi.runAllTicks();
+
+    // User triggers manual capture while finishAutoCapture is awaiting the blob.
+    // takePhotoNow() uses captureBlob (not storedBestFrameToBlob), so it can proceed.
+    frameCaptureMock.captureBlob.mockResolvedValue(new Blob(['manual'], { type: 'image/jpeg' }));
+    await controller.takePhotoNow();
+    onStateChange.mockClear();
+
+    // Resolve the pending finishAutoCapture blob — it should no-op now.
+    resolveBestBlob!(new Blob(['best'], { type: 'image/jpeg' }));
+    await vi.runAllTicks();
+
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('CameraCaptureSessionController canTakePhoto', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    captureRuntimeMocks.createReusableFrameCapture.mockReset();
+    captureRuntimeMocks.resumeVideoPlayback.mockReset();
+    captureRuntimeMocks.waitForVideoReady.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('emits canTakePhoto: true on initial live state in auto mode', async () => {
+    const { controller, onStateChange } = makeController({ initialMode: 'auto' });
+    await controller.start();
+
+    const liveState = onStateChange.mock.calls.map(([s]) => s).find((s) => s.phase === 'live');
+    expect(liveState?.canTakePhoto).toBe(true);
+  });
+
+  it('emits canTakePhoto: true on initial live state in manual mode', async () => {
+    const { controller, onStateChange } = makeController({ initialMode: 'manual' });
+    await controller.start();
+
+    const liveState = onStateChange.mock.calls.map(([s]) => s).find((s) => s.phase === 'live');
+    expect(liveState?.canTakePhoto).toBe(true);
+  });
+
+  it('emits canTakePhoto: false once the auto-capture countdown has started', async () => {
+    const assessLiveQuality = vi.fn().mockResolvedValue(makeQualityResult({ passesQualityChecks: true }));
+    const { controller, onStateChange } = makeController({
+      initialMode: 'auto',
+      assessLiveQuality,
+    });
+    await controller.start();
+    onStateChange.mockClear();
+
+    // Run the first analysis cycle — quality passes, so countdown starts.
+    vi.runAllTimers();
+    await vi.runAllTicks();
+
+    const liveStates = onStateChange.mock.calls.map(([s]) => s).filter((s) => s.phase === 'live');
+    expect(liveStates.length).toBeGreaterThan(0);
+    expect(liveStates.every((s) => !s.canTakePhoto)).toBe(true);
+  });
+
+  it('emits canTakePhoto: true again after retake resets the countdown', async () => {
+    const assessLiveQuality = vi.fn().mockResolvedValue(makeQualityResult({ passesQualityChecks: true }));
+    const { controller, onStateChange } = makeController({
+      initialMode: 'auto',
+      assessLiveQuality,
+    });
+    await controller.start();
+
+    // Advance to get into countdown state.
+    vi.runAllTimers();
+    await vi.runAllTicks();
+
+    // Trigger a manual capture (this also switches the session to manual mode).
+    await controller.takePhotoNow();
+    onStateChange.mockClear();
+
+    captureRuntimeMocks.resumeVideoPlayback.mockReturnValue(undefined);
+    await controller.retake();
+
+    const liveState = onStateChange.mock.calls.map(([s]) => s).find((s) => s.phase === 'live');
+    // After retake in manual mode (takePhotoNow switches to manual), canTakePhoto is true.
+    expect(liveState?.canTakePhoto).toBe(true);
+  });
+});
