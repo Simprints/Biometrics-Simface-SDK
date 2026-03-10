@@ -35,12 +35,6 @@ const eventLog = document.querySelector('#event-log');
 const captureElement = document.querySelector('#inline-capture');
 const captureCard = document.querySelector('.card-capture');
 
-const actionSession = {
-  action: null,
-  config: null,
-  submitting: false,
-};
-
 loadConfig();
 initializeCaptureComponent();
 wireInputPersistence();
@@ -50,6 +44,7 @@ updateCaptureCardVisibility();
 function initializeCaptureComponent() {
   captureElement.embedded = true;
   captureElement.active = false;
+  captureElement.capturePreference = 'auto-preferred';
   captureElement.confirmLabel = 'Accept';
 }
 
@@ -97,9 +92,6 @@ function wireActions() {
   buttons.enroll.addEventListener('click', () => startComponentCapture('enroll'));
   buttons.verify.addEventListener('click', () => startComponentCapture('verify'));
   clearLogButton.addEventListener('click', clearLog);
-  captureElement.addEventListener('simface-captured', handleComponentCaptured);
-  captureElement.addEventListener('simface-cancelled', handleComponentCancelled);
-  captureElement.addEventListener('simface-error', handleComponentError);
 }
 
 function getConfig() {
@@ -179,30 +171,47 @@ function startComponentCapture(action) {
   persistConfig();
 
   if (config.presentationMode === 'popup') {
-    startPopupCapture(action, config);
+    void startPopupCapture(action, config);
   } else {
-    startEmbeddedCapture(action, config);
+    void startEmbeddedCapture(action, config);
   }
 }
 
-function startEmbeddedCapture(action, config) {
-  actionSession.action = action;
-  actionSession.config = config;
-  actionSession.submitting = false;
-
+async function startEmbeddedCapture(action, config) {
+  const sdkConfig = createSdkConfig(config);
+  const workflowOptions = createWorkflowOptions();
   captureElement.embedded = true;
   captureElement.label = `Capture a face for ${action}.`;
   captureElement.confirmLabel = 'Accept';
-  void captureElement.startCapture();
 
   setBusy(action, true);
   setStatus('running', `${capitalize(action)} flow started. The SDK capture component is active in the page.`);
   appendLog('info', `${capitalize(action)} flow started in the embedded SDK component.`);
+  try {
+    const t0 = performance.now();
+    const result = action === 'enroll'
+      ? await sdkEnroll(sdkConfig, config.clientId, workflowOptions, captureElement)
+      : await sdkVerify(sdkConfig, config.clientId, workflowOptions, captureElement);
+    const latencyMs = Math.round(performance.now() - t0);
+
+    const summary = summarizeActionResult(action, result);
+    setStatus(summary.kind, summary.message);
+    setResult({ action, ok: true, result, latencyMs });
+    appendLog(summary.logKind, `${summary.message} Capture was completed by the embedded SDK component.`, result, { label: 'flow', ms: latencyMs });
+  } catch (error) {
+    const message = describeError(error);
+    setStatus('error', message);
+    setResult({ action, ok: false, error: message });
+    appendLog('error', message);
+  } finally {
+    setBusy(action, false);
+    resetCaptureComponent();
+  }
 }
 
 async function startPopupCapture(action, config) {
-  const sdkConfig = { apiUrl: config.apiUrl, projectId: config.projectId, apiKey: config.apiKey };
-  const captureOptions = { presentation: 'popup' };
+  const sdkConfig = createSdkConfig(config);
+  const workflowOptions = createWorkflowOptions();
 
   setBusy(action, true);
   setStatus('running', `${capitalize(action)} flow started. The SDK popup dialog will open.`);
@@ -211,8 +220,8 @@ async function startPopupCapture(action, config) {
   try {
     const t0 = performance.now();
     const result = action === 'enroll'
-      ? await sdkEnroll(sdkConfig, config.clientId, captureOptions)
-      : await sdkVerify(sdkConfig, config.clientId, captureOptions);
+      ? await sdkEnroll(sdkConfig, config.clientId, workflowOptions)
+      : await sdkVerify(sdkConfig, config.clientId, workflowOptions);
     const latencyMs = Math.round(performance.now() - t0);
 
     const summary = summarizeActionResult(action, result);
@@ -229,75 +238,25 @@ async function startPopupCapture(action, config) {
   }
 }
 
-async function handleComponentCaptured(event) {
-  if (!actionSession.action || actionSession.submitting) {
-    return;
-  }
-
-  actionSession.submitting = true;
-  const { imageBlob } = event.detail;
-  const { action, config } = actionSession;
-
-  setStatus('running', `Submitting ${action} request to the backend.`);
-  appendLog('info', `Submitting ${action} request with a capture produced by the SDK component.`);
-
-  try {
-    const client = new SimFaceAPIClient(config);
-    const t0 = performance.now();
-    const result = action === 'enroll'
-      ? await client.enroll(config.clientId, imageBlob)
-      : await client.verify(config.clientId, imageBlob);
-    const latencyMs = Math.round(performance.now() - t0);
-
-    const summary = summarizeActionResult(action, result);
-    setStatus(summary.kind, summary.message);
-    setResult({ action, ok: true, result, latencyMs });
-    appendLog(summary.logKind, `${summary.message} Capture was completed by the SDK component.`, result, { label: 'api', ms: latencyMs });
-  } catch (error) {
-    const message = describeError(error);
-    setStatus('error', message);
-    setResult({ action, ok: false, error: message });
-    appendLog('error', message);
-  } finally {
-    setBusy(action, false);
-    resetActionSession();
-  }
-}
-
-function handleComponentCancelled() {
-  if (!actionSession.action || actionSession.submitting) {
-    return;
-  }
-
-  const action = actionSession.action;
-  appendLog('info', `${capitalize(action)} capture cancelled.`);
-  setStatus('idle', 'Capture cancelled.');
-  setResult({ action, ok: false, error: 'Capture cancelled by user' });
-  setBusy(action, false);
-  resetActionSession();
-}
-
-function handleComponentError(event) {
-  if (!actionSession.action || actionSession.submitting) {
-    return;
-  }
-
-  const action = actionSession.action;
-  const message = event.detail?.error || 'Capture failed';
-  appendLog('error', message);
-  setStatus('error', message);
-  setResult({ action, ok: false, error: message });
-  setBusy(action, false);
-  resetActionSession();
-}
-
-function resetActionSession() {
-  actionSession.action = null;
-  actionSession.config = null;
-  actionSession.submitting = false;
+function resetCaptureComponent() {
   captureElement.active = false;
   captureElement.label = 'Choose Enroll or Verify to begin capture.';
   captureElement.confirmLabel = 'Accept';
+}
+
+function createSdkConfig(config) {
+  return {
+    apiUrl: config.apiUrl,
+    projectId: config.projectId,
+    apiKey: config.apiKey,
+  };
+}
+
+function createWorkflowOptions() {
+  return {
+    capturePreference: captureElement.capturePreference,
+    allowMediaPickerFallback: captureElement.allowMediaPickerFallback,
+  };
 }
 
 function handleActionError(action, error, statusMessage) {
