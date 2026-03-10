@@ -6,9 +6,7 @@
  */
 
 import {
-  buildCapturePlan,
   normalizeCaptureOptions,
-  resolveCaptureCapabilities,
   type NormalizedCaptureOptions,
 } from '../shared/capture-flow.js';
 import {
@@ -43,18 +41,15 @@ export async function captureFromCamera(
     return captureFromEmbeddedComponent(captureOptions);
   }
 
-  // For popup, check if camera capture is viable first.
-  // If only media-picker is available, use it directly without showing a popup.
-  const capabilities = await resolveCaptureCapabilities({
-    capturePreference: captureOptions.capturePreference,
-  });
-  const plan = buildCapturePlan(captureOptions, capabilities);
-  const hasCameraStep = plan.steps.some(
-    (step) => step === 'auto-camera' || step === 'manual-camera',
-  );
+  // For popup, skip the expensive auto-capture probe (MediaPipe load) here.
+  // We only need to know if a camera API is available; the full capabilities
+  // resolution (including auto-capture) happens inside the component once the
+  // UI is shown.  If there is no camera API, bypass the popup and go directly
+  // to the media-picker fallback.
+  const supportsMediaDevices = typeof navigator.mediaDevices?.getUserMedia === 'function';
 
-  if (!hasCameraStep) {
-    if (plan.steps.includes('media-picker')) {
+  if (!supportsMediaDevices) {
+    if (captureOptions.allowMediaPickerFallback) {
       return captureFromFileInput();
     }
 
