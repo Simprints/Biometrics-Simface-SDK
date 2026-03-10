@@ -1,116 +1,178 @@
 /**
  * Camera capture service.
  *
- * Uses realtime face guidance with automatic capture when supported and falls
- * back to a simpler manual capture flow when the browser cannot support it.
+ * Plans capture explicitly as an ordered fallback chain:
+ * auto camera -> manual camera -> media picker.
  */
 
-import { assessFaceQuality, assessFaceQualityForVideo, getVideoDetector } from './face-detection.js';
 import {
-  AUTO_CAPTURE_ANALYSIS_INTERVAL_MS,
-  AUTO_CAPTURE_COUNTDOWN_MS,
   CAPTURE_GUIDE_MASK_PATH,
   CAPTURE_GUIDE_PATH,
-  autoCaptureCompleteMessage,
-  autoCaptureCountdownMessage,
 } from '../shared/auto-capture.js';
-import type { FaceQualityResult } from '../types/index.js';
+import {
+  buildCapturePlan,
+  normalizeCaptureOptions,
+  resolveCaptureCapabilities,
+  type NormalizedCaptureOptions,
+} from '../shared/capture-flow.js';
+import {
+  CameraCaptureSessionController,
+  type CameraCaptureSessionState,
+  type LiveCaptureMode,
+} from '../shared/capture-session.js';
+import {
+  CameraAccessError,
+  blobToDataURL,
+  blobToImage,
+  captureFromFileInput,
+  openUserFacingCameraStream,
+} from '../shared/capture-runtime.js';
+import type { SimFaceCaptureOptions } from '../types/index.js';
 
 const CAPTURE_DIALOG_Z_INDEX = '2147483647';
 
-type CaptureMode = 'auto' | 'manual';
 type GuideOverlayControls = {
   wrapper: HTMLDivElement;
   setProgress: (value: number) => void;
 };
 
+type EmbeddedCaptureElement = HTMLElement & {
+  embedded: boolean;
+  active: boolean;
+  label: string;
+  confirmLabel: string;
+  capturePreference: 'auto-preferred' | 'manual-only';
+  allowMediaPickerFallback: boolean;
+  startCapture: () => Promise<void>;
+};
+
 /**
- * Opens the device camera and returns a confirmed image Blob, or null if cancelled.
+ * Opens the configured capture presentation and returns a confirmed image Blob,
+ * or null if the user cancels.
  */
-export async function captureFromCamera(): Promise<Blob | null> {
-  if (prefersNativeCameraCapture()) {
-    return captureFromFileInput();
+export async function captureFromCamera(
+  options?: SimFaceCaptureOptions,
+): Promise<Blob | null> {
+  const captureOptions = normalizeCaptureOptions(options);
+
+  if (captureOptions.presentation === 'embedded') {
+    return captureFromEmbeddedComponent(captureOptions);
   }
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error('In-browser camera capture is not supported in this browser.');
-  }
+  const capabilities = await resolveCaptureCapabilities({
+    capturePreference: captureOptions.capturePreference,
+  });
+  const plan = buildCapturePlan(captureOptions, capabilities);
 
-  const mode = (await supportsRealtimeAutoCapture()) ? 'auto' : 'manual';
-  return captureFromMediaDevices(mode);
-}
+  for (let index = 0; index < plan.steps.length; index += 1) {
+    const step = plan.steps[index];
 
-async function supportsRealtimeAutoCapture(): Promise<boolean> {
-  if (
-    typeof window.requestAnimationFrame !== 'function' ||
-    typeof window.cancelAnimationFrame !== 'function'
-  ) {
-    return false;
-  }
-
-  if (!document.createElement('canvas').getContext('2d')) {
-    return false;
-  }
-
-  try {
-    await getVideoDetector();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob | null> {
-  let stream: MediaStream;
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'user' } },
-      audio: false,
-    });
-  } catch (error) {
-    throw new Error(describeCameraError(error));
-  }
-
-  let streamStopped = false;
-  const stopStream = () => {
-    if (streamStopped) {
-      return;
+    if (step === 'media-picker') {
+      return captureFromFileInput();
     }
 
-    streamStopped = true;
-    stream.getTracks().forEach((track) => track.stop());
-  };
+    try {
+      return await captureFromPopupCamera(step === 'auto-camera' ? 'auto' : 'manual');
+    } catch (error) {
+      const hasMediaPickerFallback = plan.steps.slice(index + 1).includes('media-picker');
+      if (error instanceof CameraAccessError && hasMediaPickerFallback) {
+        return captureFromFileInput();
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error('No supported capture strategy is available in this environment.');
+}
+
+async function captureFromEmbeddedComponent(
+  options: NormalizedCaptureOptions,
+): Promise<Blob | null> {
+  await import('../components/simface-capture.js');
+
+  const host = resolveEmbeddedCaptureHost(options.container);
+  const usingExistingElement = host.tagName.toLowerCase() === 'simface-capture';
+  const element = (usingExistingElement
+    ? host
+    : document.createElement('simface-capture')) as EmbeddedCaptureElement;
+
+  if (!usingExistingElement) {
+    host.appendChild(element);
+  }
+
+  element.embedded = true;
+  element.label = options.label;
+  element.confirmLabel = options.confirmLabel;
+  element.capturePreference = options.capturePreference;
+  element.allowMediaPickerFallback = options.allowMediaPickerFallback;
 
   return new Promise((resolve, reject) => {
-    let settled = false;
-    let mode = initialMode;
-    let overlay: HTMLDivElement | null = null;
-    let previewUrl = '';
-    let previewBlob: Blob | null = null;
-    let animationFrameId: number | null = null;
-    let escapeHandler: ((event: KeyboardEvent) => void) | null = null;
-    let lastAnalysisTimestamp = 0;
-    let analysisInFlight = false;
-    let previewActive = false;
-    let videoReady = false;
-    let countdownStartedAt: number | null = null;
-    let bestCaptureBlob: Blob | null = null;
-    let bestCaptureScore = -1;
-    let bestQualityResult: FaceQualityResult | null = null;
+    const cleanup = () => {
+      element.removeEventListener('simface-captured', handleCaptured as EventListener);
+      element.removeEventListener('simface-cancelled', handleCancelled as EventListener);
+      element.removeEventListener('simface-error', handleError as EventListener);
+      element.active = false;
 
-    const resetAutoCaptureState = (guideOverlay: GuideOverlayControls) => {
-      countdownStartedAt = null;
-      bestCaptureBlob = null;
-      bestCaptureScore = -1;
-      bestQualityResult = null;
-      guideOverlay.setProgress(0);
+      if (!usingExistingElement) {
+        element.remove();
+      }
     };
 
+    const handleCaptured = (event: CustomEvent<{ imageBlob: Blob }>) => {
+      cleanup();
+      resolve(event.detail.imageBlob);
+    };
+
+    const handleCancelled = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    const handleError = (event: CustomEvent<{ error: string }>) => {
+      cleanup();
+      reject(new Error(event.detail.error));
+    };
+
+    element.addEventListener('simface-captured', handleCaptured as EventListener);
+    element.addEventListener('simface-cancelled', handleCancelled as EventListener);
+    element.addEventListener('simface-error', handleError as EventListener);
+
+    void element.startCapture().catch((error) => {
+      cleanup();
+      reject(error instanceof Error ? error : new Error('Embedded capture failed.'));
+    });
+  });
+}
+
+function resolveEmbeddedCaptureHost(container: HTMLElement | string | undefined): HTMLElement {
+  if (!container) {
+    throw new Error('Embedded capture requires a container element or selector.');
+  }
+
+  if (container instanceof HTMLElement) {
+    return container;
+  }
+
+  const element = document.querySelector<HTMLElement>(container);
+  if (!element) {
+    throw new Error(`No element matched the embedded capture container selector "${container}".`);
+  }
+
+  return element;
+}
+
+async function captureFromPopupCamera(initialMode: LiveCaptureMode): Promise<Blob | null> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let overlay: HTMLDivElement | null = null;
+    let previewUrl = '';
+    let stream: MediaStream | null = null;
+    let controller: CameraCaptureSessionController | null = null;
+    let escapeHandler: ((event: KeyboardEvent) => void) | null = null;
+
     const cleanup = () => {
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
+      controller?.stop();
 
       if (escapeHandler) {
         window.removeEventListener('keydown', escapeHandler);
@@ -120,7 +182,10 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
         URL.revokeObjectURL(previewUrl);
       }
 
-      stopStream();
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
       overlay?.remove();
     };
 
@@ -138,115 +203,6 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       }
 
       resolve(value);
-    };
-
-    const renderCaptureMode = (
-      video: HTMLVideoElement,
-      mediaContainer: HTMLDivElement,
-      title: HTMLHeadingElement,
-      copy: HTMLParagraphElement,
-      feedback: HTMLDivElement,
-      actions: HTMLDivElement,
-      cancelButton: HTMLButtonElement,
-      captureButton: HTMLButtonElement,
-      guideOverlay: GuideOverlayControls,
-    ) => {
-      previewActive = false;
-      resetAutoCaptureState(guideOverlay);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrl = '';
-      }
-      previewBlob = null;
-
-      mediaContainer.replaceChildren(video, guideOverlay.wrapper);
-      if (videoReady) {
-        resumeVideoPreview(video);
-      }
-      title.textContent = mode === 'auto' ? 'Center your face' : 'Take a face photo';
-      copy.textContent =
-        mode === 'auto'
-          ? 'Keep your face inside the oval. We will start a short countdown when the framing looks good and keep the best frame.'
-          : 'Line up your face in the oval, then take a photo manually.';
-
-      feedback.textContent =
-        mode === 'auto'
-          ? 'Looking for a single face in frame...'
-          : 'When you are ready, press Take photo.';
-      setFeedbackState(feedback, mode === 'auto' ? 'neutral' : 'manual');
-
-      captureButton.style.display = mode === 'manual' ? 'inline-flex' : 'none';
-      captureButton.disabled = true;
-      actions.replaceChildren(cancelButton, captureButton);
-    };
-
-    const renderPreviewMode = (
-      video: HTMLVideoElement,
-      mediaContainer: HTMLDivElement,
-      title: HTMLHeadingElement,
-      copy: HTMLParagraphElement,
-      feedback: HTMLDivElement,
-      actions: HTMLDivElement,
-      cancelButton: HTMLButtonElement,
-      confirmButton: HTMLButtonElement,
-      retakeButton: HTMLButtonElement,
-      blob: Blob,
-      qualityResult: FaceQualityResult | null,
-      options?: {
-        copyText?: string;
-        feedbackText?: string;
-        feedbackState?: 'neutral' | 'success' | 'error' | 'manual';
-      },
-    ) => {
-      previewActive = true;
-      countdownStartedAt = null;
-
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-
-      previewUrl = URL.createObjectURL(blob);
-      previewBlob = blob;
-
-      const image = document.createElement('img');
-      image.alt = 'Captured face preview';
-      image.src = previewUrl;
-      applyStyles(image, {
-        position: 'absolute',
-        inset: '0',
-        zIndex: '1',
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-      });
-
-      mediaContainer.replaceChildren(video, image);
-      title.textContent = 'Review your photo';
-      copy.textContent =
-        options?.copyText
-          ?? (qualityResult?.passesQualityChecks === false
-            ? 'The capture did not pass the checks. Retake the photo.'
-            : 'Confirm this photo or retake it.');
-
-      feedback.textContent =
-        options?.feedbackText
-          ?? qualityResult?.message
-          ?? 'Review the captured image before continuing.';
-      setFeedbackState(
-        feedback,
-        options?.feedbackState
-          ?? (qualityResult
-            ? qualityResult.passesQualityChecks
-              ? 'success'
-              : 'error'
-            : 'manual'),
-      );
-
-      actions.replaceChildren(cancelButton, retakeButton);
-
-      if (qualityResult?.passesQualityChecks !== false) {
-        actions.append(confirmButton);
-      }
     };
 
     try {
@@ -308,11 +264,11 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       video.autoplay = true;
       video.muted = true;
       video.playsInline = true;
-      video.srcObject = stream;
       applyStyles(video, {
         width: '100%',
         height: '100%',
         objectFit: 'cover',
+        transform: 'scaleX(-1)',
       });
 
       const feedback = document.createElement('div');
@@ -335,9 +291,6 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
 
       const captureButton = createActionButton('Take photo', 'primary');
       captureButton.dataset.simfaceAction = 'capture';
-      captureButton.style.display = mode === 'manual' ? 'inline-flex' : 'none';
-      captureButton.disabled = true;
-      const guideOverlay = createGuideOverlay();
 
       const confirmButton = createActionButton('Use photo', 'primary');
       confirmButton.dataset.simfaceAction = 'confirm';
@@ -345,21 +298,11 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
       const retakeButton = createActionButton('Retake', 'secondary');
       retakeButton.dataset.simfaceAction = 'retake';
 
+      const guideOverlay = createGuideOverlay();
+
       panel.append(title, copy, mediaContainer, feedback, actions);
       overlay.append(panel);
       document.body.appendChild(overlay);
-
-      renderCaptureMode(
-        video,
-        mediaContainer,
-        title,
-        copy,
-        feedback,
-        actions,
-        cancelButton,
-        captureButton,
-        guideOverlay,
-      );
 
       escapeHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
@@ -367,296 +310,181 @@ async function captureFromMediaDevices(initialMode: CaptureMode): Promise<Blob |
         }
       };
 
+      window.addEventListener('keydown', escapeHandler);
       cancelButton.addEventListener('click', () => finalize(null));
-
-      confirmButton.addEventListener('click', async () => {
-        if (!previewBlob) {
-          finalize(null, new Error('Failed to confirm the photo.'));
-          return;
-        }
-
-        finalize(previewBlob);
+      captureButton.addEventListener('click', () => {
+        void controller?.takePhotoNow().catch((error) => {
+          finalize(null, error instanceof Error ? error : new Error('Failed to capture an image.'));
+        });
       });
-
       retakeButton.addEventListener('click', () => {
-        renderCaptureMode(
-          video,
-          mediaContainer,
-          title,
-          copy,
-          feedback,
-          actions,
-          cancelButton,
-          captureButton,
-          guideOverlay,
-        );
-        if (mode === 'manual' && videoReady) {
-          captureButton.disabled = false;
-        }
-        if (mode === 'auto') {
-          scheduleAutoCapture();
+        void controller?.retake().catch((error) => {
+          finalize(null, error instanceof Error ? error : new Error('Failed to restart the capture.'));
+        });
+      });
+      confirmButton.addEventListener('click', () => {
+        try {
+          const blob = controller?.confirm();
+          finalize(blob ?? null);
+        } catch (error) {
+          finalize(null, error instanceof Error ? error : new Error('Failed to confirm the photo.'));
         }
       });
 
-      captureButton.addEventListener('click', async () => {
-        if (previewActive) {
-          return;
-        }
-
-        try {
-          const blob = await captureVideoFrame(video);
-          const qualityResult = await assessCapturedBlobSafely(blob);
-          renderPreviewMode(
-            video,
+      controller = new CameraCaptureSessionController({
+        videoElement: video,
+        initialMode,
+        copy: {
+          autoReadyMessage: 'Looking for a single face in frame...',
+          manualReadyMessage: 'When you are ready, press Take photo.',
+          autoUnavailableMessage: 'Automatic capture is unavailable in this browser. Use Take photo instead.',
+          retakeReadyMessage: 'When you are ready, press Take photo.',
+        },
+        onStateChange: (state) => {
+          renderPopupState({
+            state,
             mediaContainer,
+            video,
             title,
             copy,
             feedback,
             actions,
             cancelButton,
+            captureButton,
             confirmButton,
             retakeButton,
-            blob,
-            qualityResult,
-          );
-        } catch (error) {
-          finalize(null, error instanceof Error ? error : new Error('Failed to capture an image.'));
-        }
+            guideOverlay,
+            setPreviewUrl(nextUrl) {
+              if (previewUrl) {
+                URL.revokeObjectURL(previewUrl);
+              }
+
+              previewUrl = nextUrl;
+            },
+          });
+        },
       });
 
-      window.addEventListener('keydown', escapeHandler);
-
-      waitForVideoReady(video)
-        .then(() => {
-          videoReady = true;
-          if (mode === 'manual') {
-            captureButton.disabled = false;
+      void (async () => {
+        try {
+          stream = await openUserFacingCameraStream();
+          if (settled) {
+            stream.getTracks().forEach((track) => track.stop());
             return;
           }
 
-          scheduleAutoCapture();
-        })
-        .catch((error) => {
-          finalize(null, error instanceof Error ? error : new Error('Failed to start the camera preview.'));
-        });
-
-      function scheduleAutoCapture() {
-        if (settled || previewActive || mode !== 'auto') {
-          return;
+          video.srcObject = stream;
+          await controller?.start();
+        } catch (error) {
+          finalize(
+            null,
+            error instanceof Error ? error : new Error('Failed to open the camera capture UI.'),
+          );
         }
-
-        animationFrameId = window.requestAnimationFrame(async (timestamp) => {
-          if (
-            previewActive ||
-            analysisInFlight ||
-            timestamp - lastAnalysisTimestamp < AUTO_CAPTURE_ANALYSIS_INTERVAL_MS
-          ) {
-            scheduleAutoCapture();
-            return;
-          }
-
-          lastAnalysisTimestamp = timestamp;
-          analysisInFlight = true;
-
-          try {
-            const qualityResult = await assessFaceQualityForVideo(video, timestamp);
-
-            if (qualityResult.passesQualityChecks) {
-              if (countdownStartedAt === null) {
-                countdownStartedAt = timestamp;
-              }
-
-              if (qualityResult.captureScore > bestCaptureScore) {
-                bestCaptureBlob = await captureVideoFrame(video);
-                bestCaptureScore = qualityResult.captureScore;
-                bestQualityResult = qualityResult;
-              }
-            }
-
-            if (countdownStartedAt !== null) {
-              const countdownProgress = Math.min(
-                (timestamp - countdownStartedAt) / AUTO_CAPTURE_COUNTDOWN_MS,
-                1,
-              );
-              guideOverlay.setProgress(countdownProgress);
-              feedback.textContent = autoCaptureCountdownMessage(
-                timestamp,
-                countdownStartedAt,
-                qualityResult,
-              );
-              setFeedbackState(feedback, qualityResult.passesQualityChecks ? 'success' : 'neutral');
-
-              if (countdownProgress >= 1) {
-                const blob = bestCaptureBlob ?? await captureVideoFrame(video);
-                const previewQualityResult =
-                  bestCaptureBlob && bestQualityResult
-                    ? bestQualityResult
-                    : await assessCapturedBlobSafely(blob);
-
-                renderPreviewMode(
-                  video,
-                  mediaContainer,
-                  title,
-                  copy,
-                  feedback,
-                  actions,
-                  cancelButton,
-                  confirmButton,
-                  retakeButton,
-                  blob,
-                  previewQualityResult,
-                  {
-                    copyText: 'Best frame captured. Review and confirm this photo.',
-                    feedbackText: autoCaptureCompleteMessage(previewQualityResult),
-                    feedbackState: previewQualityResult?.passesQualityChecks === false ? 'error' : 'success',
-                  },
-                );
-                return;
-              }
-            } else {
-              guideOverlay.setProgress(0);
-              feedback.textContent = qualityResult.message;
-              setFeedbackState(feedback, qualityResult.passesQualityChecks ? 'success' : 'neutral');
-            }
-
-          } catch (error) {
-            mode = 'manual';
-            renderCaptureMode(
-              video,
-              mediaContainer,
-              title,
-              copy,
-              feedback,
-              actions,
-              cancelButton,
-              captureButton,
-              guideOverlay,
-            );
-            captureButton.disabled = false;
-            feedback.textContent = 'Automatic capture is unavailable in this browser. Use Take photo instead.';
-            setFeedbackState(feedback, 'manual');
-          } finally {
-            analysisInFlight = false;
-          }
-
-          scheduleAutoCapture();
-        });
-      }
+      })();
     } catch (error) {
-      finalize(null, error instanceof Error ? error : new Error('Failed to open the camera capture UI.'));
+      finalize(
+        null,
+        error instanceof Error ? error : new Error('Failed to open the camera capture UI.'),
+      );
     }
   });
 }
 
-function captureFromFileInput(): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'user';
-    input.style.display = 'none';
+type PopupRendererOptions = {
+  state: CameraCaptureSessionState;
+  mediaContainer: HTMLDivElement;
+  video: HTMLVideoElement;
+  title: HTMLHeadingElement;
+  copy: HTMLParagraphElement;
+  feedback: HTMLDivElement;
+  actions: HTMLDivElement;
+  cancelButton: HTMLButtonElement;
+  captureButton: HTMLButtonElement;
+  confirmButton: HTMLButtonElement;
+  retakeButton: HTMLButtonElement;
+  guideOverlay: GuideOverlayControls;
+  setPreviewUrl: (url: string) => void;
+};
 
-    input.addEventListener('change', () => {
-      const file = input.files?.[0] ?? null;
-      cleanup();
-      resolve(file);
+function renderPopupState(options: PopupRendererOptions) {
+  const {
+    state,
+    mediaContainer,
+    video,
+    title,
+    copy,
+    feedback,
+    actions,
+    cancelButton,
+    captureButton,
+    confirmButton,
+    retakeButton,
+    guideOverlay,
+    setPreviewUrl,
+  } = options;
+
+  guideOverlay.setProgress(state.phase === 'live' && state.mode === 'auto' ? state.countdownProgress : 0);
+
+  if (state.phase === 'preview') {
+    const nextPreviewUrl = URL.createObjectURL(state.previewBlob);
+    setPreviewUrl(nextPreviewUrl);
+
+    const image = document.createElement('img');
+    image.alt = 'Captured face preview';
+    image.src = nextPreviewUrl;
+    applyStyles(image, {
+      position: 'absolute',
+      inset: '0',
+      zIndex: '1',
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      transform: 'scaleX(-1)',
     });
 
-    const handleFocus = () => {
-      setTimeout(() => {
-        if (!input.files?.length) {
-          cleanup();
-          resolve(null);
-        }
-      }, 500);
-    };
+    mediaContainer.replaceChildren(video, image);
+    title.textContent = 'Review your photo';
+    copy.textContent = state.qualityResult?.passesQualityChecks === false
+      ? 'The capture did not pass the checks. Retake the photo.'
+      : 'Confirm this photo or retake it.';
+    feedback.textContent = state.feedbackMessage;
+    setFeedbackState(feedback, state.feedbackTone);
+    actions.replaceChildren(cancelButton, retakeButton);
 
-    window.addEventListener('focus', handleFocus, { once: true });
-
-    function cleanup() {
-      window.removeEventListener('focus', handleFocus);
-      input.remove();
+    if (state.canConfirm) {
+      actions.append(confirmButton);
     }
 
-    document.body.appendChild(input);
-    input.click();
-  });
-}
-
-function prefersNativeCameraCapture(): boolean {
-  return /WhatsApp/i.test(navigator.userAgent);
-}
-
-async function waitForVideoReady(video: HTMLVideoElement): Promise<void> {
-  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-    await video.play();
     return;
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const handleReady = () => {
-      cleanup();
-      resolve();
-    };
+  mediaContainer.replaceChildren(video, guideOverlay.wrapper);
+  setPreviewUrl('');
 
-    const handleError = () => {
-      cleanup();
-      reject(new Error('Failed to start the camera preview.'));
-    };
-
-    const cleanup = () => {
-      video.removeEventListener('loadedmetadata', handleReady);
-      video.removeEventListener('error', handleError);
-    };
-
-    video.addEventListener('loadedmetadata', handleReady, { once: true });
-    video.addEventListener('error', handleError, { once: true });
-  });
-
-  await video.play();
-}
-
-function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
-  if (!video.videoWidth || !video.videoHeight) {
-    return Promise.reject(new Error('Camera preview is not ready yet.'));
+  if (state.mode === 'auto') {
+    title.textContent = state.phase === 'starting' ? 'Opening camera...' : 'Center your face';
+    copy.textContent = 'Keep your face inside the oval. We will start a short countdown when the framing looks good and keep the best frame.';
+  } else {
+    title.textContent = state.phase === 'starting' ? 'Opening camera...' : 'Take a face photo';
+    copy.textContent = 'Line up your face in the oval, then take a photo manually.';
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  feedback.textContent = state.phase === 'starting'
+    ? 'Requesting camera access...'
+    : state.feedbackMessage;
+  setFeedbackState(
+    feedback,
+    state.phase === 'starting'
+      ? 'neutral'
+      : state.feedbackTone,
+  );
 
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return Promise.reject(new Error('Failed to initialize camera capture.'));
-  }
-
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('Failed to capture an image.'));
-        return;
-      }
-
-      resolve(blob);
-    }, 'image/jpeg', 0.92);
-  });
-}
-
-function resumeVideoPreview(video: HTMLVideoElement) {
-  void video.play().catch(() => {
-    // Ignore resume failures here; capture flow already handles preview startup errors.
-  });
-}
-
-async function assessCapturedBlobSafely(blob: Blob): Promise<FaceQualityResult | null> {
-  try {
-    const image = await blobToImage(blob);
-    return await assessFaceQuality(image);
-  } catch {
-    return null;
-  }
+  captureButton.style.display = state.phase === 'live' && state.mode === 'manual'
+    ? 'inline-flex'
+    : 'none';
+  captureButton.disabled = !(state.phase === 'live' && state.mode === 'manual');
+  actions.replaceChildren(cancelButton, captureButton);
 }
 
 function createActionButton(label: string, variant: 'primary' | 'secondary'): HTMLButtonElement {
@@ -775,58 +603,4 @@ function applyStyles(element: HTMLElement | SVGElement, styles: Partial<CSSStyle
   Object.assign(element.style, styles);
 }
 
-function describeCameraError(error: unknown): string {
-  if (error instanceof DOMException) {
-    switch (error.name) {
-      case 'NotAllowedError':
-      case 'SecurityError':
-        return 'Camera access was denied. Allow camera access and try again.';
-      case 'NotFoundError':
-        return 'No camera was found on this device.';
-      case 'NotReadableError':
-        return 'The camera is already in use by another application.';
-      default:
-        return error.message || 'Failed to access the camera.';
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return 'Failed to access the camera.';
-}
-
-/**
- * Loads a Blob as an HTMLImageElement for face detection analysis.
- */
-export function blobToImage(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load captured image'));
-    };
-
-    img.src = url;
-  });
-}
-
-/**
- * Creates a data URL from a Blob for display in an <img> tag.
- */
-export function blobToDataURL(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Failed to read image'));
-    reader.readAsDataURL(blob);
-  });
-}
+export { blobToImage, blobToDataURL };
