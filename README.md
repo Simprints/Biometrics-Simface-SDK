@@ -163,16 +163,7 @@ Parameters:
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
-
-Returns `EnrollResult`:
-```typescript
-{
-  success: boolean;
-  clientId: string;
-  message?: string;
-  alreadyEnrolled?: boolean;
-}
-```
+Returns: `EnrollResult`
 
 ### `verify(config, clientId, workflowOptions?, captureOptions?): Promise<VerifyResult>`
 
@@ -186,17 +177,7 @@ Parameters:
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
-
-Returns `VerifyResult`:
-```typescript
-{
-  match: boolean;
-  score: number;
-  threshold: number;
-  message?: string;
-  notEnrolled?: boolean;
-}
-```
+Returns: `VerifyResult`
 
 ### `SimFaceAPIClient` and the backend REST interface
 
@@ -289,6 +270,8 @@ This is more flexible, but it also means the host owns more of the workflow.
 | `simface-cancelled` | - | Fires when the user cancels the capture flow |
 | `simface-error` | `{ error: string }` | Fires on capture/detection errors |
 
+## Type Definitions
+
 ### `SimFaceConfig`
 
 ```typescript
@@ -312,12 +295,35 @@ This is more flexible, but it also means the host owns more of the workflow.
 
 ```typescript
 {
-    component: SimFaceCaptureElement;
-    label ? : string;
-    captureLabel ? : string;
-    retakeLabel ? : string;
-    confirmLabel ? : string;
-    retryLabel ? : string;
+  component: SimFaceCaptureElement;
+  label?: string;
+  captureLabel?: string;
+  retakeLabel?: string;
+  confirmLabel?: string;
+  retryLabel?: string;
+}
+```
+
+### `EnrollResult`
+
+```typescript
+{
+  success: boolean;
+  clientId: string;
+  message?: string;
+  alreadyEnrolled?: boolean;
+}
+```
+
+### `VerifyResult`
+
+```typescript
+{
+  match: boolean;
+  score: number;
+  threshold: number;
+  message?: string;
+  notEnrolled?: boolean;
 }
 ```
 
