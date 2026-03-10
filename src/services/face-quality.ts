@@ -93,11 +93,11 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
   const faceCenterY = (bbox.originY + bbox.height / 2) / height;
 
   if (faceCenterX < 0.5 - CENTER_TOLERANCE_X) {
-    return createFrameAdjustmentResult(detection.confidence, 'move-right', 'Move your face a little to the right.');
+    return createFrameAdjustmentResult(detection.confidence, 'move-left', 'Move your face a little to the left.');
   }
 
   if (faceCenterX > 0.5 + CENTER_TOLERANCE_X) {
-    return createFrameAdjustmentResult(detection.confidence, 'move-left', 'Move your face a little to the left.');
+    return createFrameAdjustmentResult(detection.confidence, 'move-right', 'Move your face a little to the right.');
   }
 
   if (faceCenterY < 0.5 - CENTER_TOLERANCE_Y) {
@@ -143,15 +143,15 @@ function detectTurnFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedback
   const noseOffsetRatio = (nose.x - eyeMidpointX) / eyeDistance;
   if (noseOffsetRatio <= -MAX_NOSE_OFFSET_RATIO) {
     return {
-      feedback: 'turn-right',
-      message: 'Turn slightly right so your face points at the camera.',
+      feedback: 'turn-left',
+      message: 'Turn slightly left so your face points at the camera.',
     };
   }
 
   if (noseOffsetRatio >= MAX_NOSE_OFFSET_RATIO) {
     return {
-      feedback: 'turn-left',
-      message: 'Turn slightly left so your face points at the camera.',
+      feedback: 'turn-right',
+      message: 'Turn slightly right so your face points at the camera.',
     };
   }
 

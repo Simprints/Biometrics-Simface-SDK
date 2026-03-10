@@ -31,7 +31,7 @@ describe('evaluateFaceQuality', () => {
       height: 1000,
     });
 
-    expect(result.feedback).toBe('move-right');
+    expect(result.feedback).toBe('move-left');
     expect(result.isCentered).toBe(false);
   });
 
@@ -54,8 +54,8 @@ describe('evaluateFaceQuality', () => {
       height: 1000,
     });
 
-    expect(result.feedback).toBe('turn-right');
-    expect(result.message).toContain('Turn slightly right');
+    expect(result.feedback).toBe('turn-left');
+    expect(result.message).toContain('Turn slightly left');
   });
 
   it('passes when the face is centered, sized correctly, and facing forward', () => {

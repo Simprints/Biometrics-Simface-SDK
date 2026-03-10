@@ -113,6 +113,7 @@ export class SimFaceCapture extends LitElement {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transform: scaleX(-1);
     }
 
     .preview-img {

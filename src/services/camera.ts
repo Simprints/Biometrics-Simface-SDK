@@ -268,6 +268,7 @@ async function captureFromPopupCamera(initialMode: LiveCaptureMode): Promise<Blo
         width: '100%',
         height: '100%',
         objectFit: 'cover',
+        transform: 'scaleX(-1)',
       });
 
       const feedback = document.createElement('div');
