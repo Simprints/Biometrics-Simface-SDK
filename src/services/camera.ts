@@ -440,6 +440,7 @@ function renderPopupState(options: PopupRendererOptions) {
       width: '100%',
       height: '100%',
       objectFit: 'cover',
+      transform: 'scaleX(-1)',
     });
 
     mediaContainer.replaceChildren(video, image);
