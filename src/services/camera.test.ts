@@ -251,8 +251,9 @@ describe('camera service', () => {
       expect(stop).toHaveBeenCalled();
     });
 
-    it('falls back to file input capture in WhatsApp', async () => {
+    it('falls back to file input capture in WhatsApp when mediaDevices is unavailable', async () => {
       setUserAgent('Mozilla/5.0 WhatsApp/2.24.0');
+      setMediaDevices(undefined);
 
       const appendSpy = vi.spyOn(document.body, 'appendChild');
       const mockFile = new File(['image data'], 'photo.jpg', { type: 'image/jpeg' });
@@ -271,6 +272,54 @@ describe('camera service', () => {
       expect(input.type).toBe('file');
       expect(input.accept).toBe('image/*');
       expect(input.capture).toBe('user');
+    });
+
+    it('skips auto-capture probe and uses manual camera in WhatsApp when mediaDevices is available', async () => {
+      setUserAgent('Mozilla/5.0 WhatsApp/2.24.0');
+
+      const stop = vi.fn();
+      const getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      } as unknown as MediaStream);
+
+      setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+      faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
+
+      const capturePromise = captureFromCamera();
+      await flushMicrotasks();
+
+      const video = document.querySelector('video') as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      if (!video) {
+        throw new Error('Video element was not rendered.');
+      }
+
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks(10);
+
+      // Auto-capture probe must not have been called for WhatsApp UA
+      expect(faceDetectionMocks.getVideoDetector).not.toHaveBeenCalled();
+
+      // Manual capture button should be visible (not auto-capture countdown)
+      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      expect(captureButton).not.toBeNull();
+      expect(captureButton?.style.display).toBe('inline-flex');
+
+      captureButton?.dispatchEvent(new MouseEvent('click'));
+      await flushMicrotasks(10);
+
+      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      expect(confirmButton).not.toBeNull();
+      confirmButton?.dispatchEvent(new MouseEvent('click'));
+
+      const result = await capturePromise;
+      expect(result).toBeInstanceOf(Blob);
+      expect(faceDetectionMocks.assessFaceQuality).toHaveBeenCalled();
+      expect(faceDetectionMocks.assessFaceQualityForVideo).not.toHaveBeenCalled();
+      expect(stop).toHaveBeenCalled();
     });
 
     it('falls back to file input capture when camera capture is unavailable outside WhatsApp', async () => {
