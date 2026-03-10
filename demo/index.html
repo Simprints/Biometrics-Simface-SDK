@@ -67,7 +67,15 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card card-capture">
+          <h2>Inline SDK capture</h2>
+          <p class="section-copy">
+            The demo uses the SDK web component directly here instead of opening a separate capture popup.
+          </p>
+          <simface-capture id="inline-capture" embedded label="Choose Enroll or Verify to begin capture."></simface-capture>
+        </section>
+
+        <section class="card card-status">
           <div class="status-row">
             <h2>Run status</h2>
             <span id="status-badge" class="status status-idle">Idle</span>
@@ -79,24 +87,6 @@
 
           <h3>Latest result</h3>
           <pre id="result-output" class="result-output">No action has been run yet.</pre>
-        </section>
-
-        <section class="card card-capture">
-          <h2>Inline SDK capture</h2>
-          <p class="section-copy">
-            The demo uses the SDK web component directly here instead of opening a separate capture popup.
-          </p>
-          <simface-capture id="inline-capture" embedded label="Choose Enroll or Verify to begin capture."></simface-capture>
-        </section>
-
-        <section class="card">
-          <h2>Demo checklist</h2>
-          <ol class="checklist">
-            <li>Build the SDK at the repo root before starting the demo.</li>
-            <li>Use the hosted backend by default, or run your own backend and override the API URL in the form.</li>
-            <li>Use this page on <code>localhost</code> so camera capture works reliably in the browser.</li>
-            <li>Keep internet access available for the MediaPipe detector assets used by the SDK.</li>
-          </ol>
         </section>
 
         <section class="card card-log">

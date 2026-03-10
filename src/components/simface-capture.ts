@@ -76,25 +76,56 @@ export class SimFaceCapture extends LitElement {
     :host([embedded]) {
       max-width: none;
       margin: 0;
-      text-align: left;
     }
 
     .container {
+      position: relative;
       padding: 16px;
       border: 1px solid #e0e0e0;
-      border-radius: 12px;
+      border-radius: 16px;
       background: #fafafa;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.06);
+      color: #49454f;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .close-btn:hover {
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    .close-btn svg {
+      width: 20px;
+      height: 20px;
     }
 
     .capture-shell {
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 16px;
     }
 
     .capture-copy {
       margin: 0;
       color: #334155;
+      text-align: center;
+      width: 100%;
     }
 
     .stage {
@@ -107,7 +138,6 @@ export class SimFaceCapture extends LitElement {
         radial-gradient(circle at top, rgba(56, 189, 248, 0.16), transparent 30%),
         linear-gradient(180deg, #0f172a, #020617);
       box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
-      align-self: center;
     }
 
     .video,
@@ -163,22 +193,23 @@ export class SimFaceCapture extends LitElement {
 
     .btn-row {
       display: flex;
-      flex-wrap: wrap;
       gap: 12px;
+      width: min(100%, 420px);
     }
 
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 12px 24px;
-      margin: 8px 4px 0 0;
+      flex: 1;
+      padding: 14px 24px;
       border: none;
-      border-radius: 999px;
-      font-size: 16px;
+      border-radius: 100px;
+      font-size: 15px;
       font-weight: 600;
+      letter-spacing: 0.02em;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: background-color 0.15s, box-shadow 0.15s;
     }
 
     .btn-primary {
@@ -188,11 +219,33 @@ export class SimFaceCapture extends LitElement {
 
     .btn-primary:hover {
       background: #1d4ed8;
+      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
     }
 
     .btn-primary:disabled {
       background: #93c5fd;
       cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-confirm {
+      background: #16a34a;
+      color: white;
+    }
+
+    .btn-confirm:hover {
+      background: #15803d;
+      box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3);
+    }
+
+    .btn-retake {
+      background: #dc2626;
+      color: white;
+    }
+
+    .btn-retake:hover {
+      background: #b91c1c;
+      box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
     }
 
     .btn-secondary {
@@ -204,17 +257,17 @@ export class SimFaceCapture extends LitElement {
       background: #d1d5db;
     }
 
-    .btn-ghost {
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-
     .quality-msg {
       padding: 10px 14px;
       border-radius: 14px;
-      margin: 8px 0 0;
       font-size: 14px;
       font-weight: 600;
+      width: min(100%, 420px);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
     }
 
     .quality-good {
@@ -303,7 +356,18 @@ export class SimFaceCapture extends LitElement {
   }
 
   private renderCaptureState() {
+    const showClose = this.captureState !== 'idle';
+
     return html`
+      ${showClose
+        ? html`<button class="close-btn" data-simface-action="cancel" @click=${this.handleCancel} aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>`
+        : ''}
+
       <p class="capture-copy">${this.label}</p>
 
       ${this.captureState === 'idle'
@@ -342,24 +406,21 @@ export class SimFaceCapture extends LitElement {
         ${this.captureState === 'live'
           ? html`
               ${this.captureMode === 'manual'
-                ? html`<button class="btn btn-secondary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>Take photo</button>`
+                ? html`<button class="btn btn-primary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>Take photo</button>`
                 : ''}
-              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
             `
           : ''}
         ${this.captureState === 'preview'
           ? html`
-              <button class="btn btn-secondary" data-simface-action="retake" @click=${this.handleRetake}>Retake</button>
+              <button class="btn btn-retake" data-simface-action="retake" @click=${this.handleRetake}>Retake</button>
               ${this.qualityResult?.passesQualityChecks === false
                 ? ''
-                : html`<button class="btn btn-primary" data-simface-action="confirm" @click=${this.handleConfirm}>${this.confirmLabel}</button>`}
-              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
+                : html`<button class="btn btn-confirm" data-simface-action="confirm" @click=${this.handleConfirm}>${this.confirmLabel}</button>`}
             `
           : ''}
         ${this.captureState === 'error'
           ? html`
               <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>Try again</button>
-              <button class="btn btn-ghost" data-simface-action="cancel" @click=${this.handleCancel}>Cancel</button>
             `
           : ''}
       </div>
