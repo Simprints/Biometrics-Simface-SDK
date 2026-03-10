@@ -96,6 +96,7 @@ export class CameraCaptureSessionController {
   private readonly assessPreviewBlob: (blob: Blob) => Promise<FaceQualityResult | null>;
   private readonly frameCapture = createReusableFrameCapture();
 
+  private stopped = false;
   private mode: LiveCaptureMode;
   private state: CameraCaptureSessionState;
   private animationFrameId: number | null = null;
@@ -123,8 +124,10 @@ export class CameraCaptureSessionController {
   }
 
   async start() {
+    if (this.stopped) return;
     this.emit(this.createStartingState());
     await this.waitForReady(this.videoElement);
+    if (this.stopped) return;
     this.emit(this.createLiveState({
       feedbackMessage: this.mode === 'auto'
         ? this.copy.autoReadyMessage
@@ -138,17 +141,19 @@ export class CameraCaptureSessionController {
   }
 
   async takePhotoNow() {
-    if (this.state.phase !== 'live') {
+    if (this.stopped || this.state.phase !== 'live') {
       return;
     }
 
     const blob = await this.frameCapture.captureBlob(this.videoElement);
+    if (this.stopped) return;
     const qualityResult = await this.assessPreviewBlob(blob);
+    if (this.stopped) return;
     this.emit(this.createPreviewState(blob, qualityResult));
   }
 
   async retake() {
-    if (this.state.phase !== 'preview') {
+    if (this.stopped || this.state.phase !== 'preview') {
       return;
     }
 
@@ -175,6 +180,7 @@ export class CameraCaptureSessionController {
   }
 
   stop() {
+    this.stopped = true;
     this.cancelScheduledAnalysis();
   }
 
@@ -247,6 +253,7 @@ export class CameraCaptureSessionController {
   }
 
   emitError(errorMessage: string) {
+    if (this.stopped) return;
     this.cancelScheduledAnalysis();
     this.emit({
       phase: 'error',
@@ -264,12 +271,13 @@ export class CameraCaptureSessionController {
   }
 
   private emit(state: CameraCaptureSessionState) {
+    if (this.stopped) return;
     this.state = state;
     this.onStateChange(state);
   }
 
   private scheduleAutoAnalysis() {
-    if (this.mode !== 'auto' || this.state.phase !== 'live') {
+    if (this.stopped || this.mode !== 'auto' || this.state.phase !== 'live') {
       return;
     }
 
@@ -286,6 +294,7 @@ export class CameraCaptureSessionController {
   }
 
   private async runAutoAnalysis(timestamp: number) {
+    if (this.stopped) return;
     if (this.mode !== 'auto' || this.state.phase !== 'live' || this.analysisInFlight) {
       this.scheduleAutoAnalysis();
       return;
@@ -296,6 +305,7 @@ export class CameraCaptureSessionController {
 
     try {
       const qualityResult = await this.assessLiveQuality(this.videoElement, timestamp);
+      if (this.stopped) return;
 
       if (qualityResult.passesQualityChecks) {
         if (this.countdownStartedAt === null) {
@@ -351,8 +361,9 @@ export class CameraCaptureSessionController {
     const blob = this.frameCapture.hasStoredBestFrame()
       ? await this.frameCapture.storedBestFrameToBlob()
       : await this.frameCapture.captureBlob(this.videoElement);
+    if (this.stopped) return;
     const qualityResult = this.bestQualityResult ?? await this.assessPreviewBlob(blob);
-
+    if (this.stopped) return;
     this.emit(this.createPreviewState(blob, qualityResult, {
       feedbackMessage: autoCaptureCompleteMessage(qualityResult),
       feedbackTone: qualityResult?.passesQualityChecks === false ? 'error' : 'success',
