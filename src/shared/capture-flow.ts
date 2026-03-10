@@ -28,8 +28,8 @@ export interface CapturePlan {
   capabilities: CaptureCapabilities;
 }
 
-const DEFAULT_LABEL = 'Take a selfie';
-const DEFAULT_CONFIRM_LABEL = 'Use this capture';
+export const DEFAULT_LABEL = 'Capturing Face';
+export const DEFAULT_CONFIRM_LABEL = 'Accept';
 
 export function normalizeCaptureOptions(
   options: SimFaceCaptureOptions | undefined,

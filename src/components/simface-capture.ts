@@ -9,6 +9,8 @@ import {
   buildCapturePlan,
   normalizeCaptureOptions,
   resolveCaptureCapabilities,
+  DEFAULT_LABEL,
+  DEFAULT_CONFIRM_LABEL,
   type CapturePlanStep,
 } from '../shared/capture-flow.js';
 import {
@@ -37,10 +39,10 @@ type FeedbackTone = 'neutral' | 'success' | 'error' | 'manual';
  */
 @customElement('simface-capture')
 export class SimFaceCapture extends LitElement {
-  @property({ type: String }) label = 'Take a selfie';
+  @property({ type: String }) label = DEFAULT_LABEL;
   @property({ type: Boolean, reflect: true }) embedded = false;
   @property({ type: Boolean, reflect: true }) active = false;
-  @property({ type: String, attribute: 'confirm-label' }) confirmLabel = 'Use this capture';
+  @property({ type: String, attribute: 'confirm-label' }) confirmLabel = DEFAULT_CONFIRM_LABEL;
   @property({ type: String, attribute: 'capture-preference' })
   capturePreference: CapturePreference = 'auto-preferred';
   @property({ type: Boolean, attribute: 'allow-media-picker-fallback' })

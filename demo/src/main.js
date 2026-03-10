@@ -50,7 +50,7 @@ updateCaptureCardVisibility();
 function initializeCaptureComponent() {
   captureElement.embedded = true;
   captureElement.active = false;
-  captureElement.confirmLabel = 'Confirm capture';
+  captureElement.confirmLabel = 'Accept';
 }
 
 function loadConfig() {
@@ -192,7 +192,7 @@ function startEmbeddedCapture(action, config) {
 
   captureElement.embedded = true;
   captureElement.label = `Capture a face for ${action}.`;
-  captureElement.confirmLabel = `Confirm ${action}`;
+  captureElement.confirmLabel = 'Accept';
   void captureElement.startCapture();
 
   setBusy(action, true);
@@ -297,7 +297,7 @@ function resetActionSession() {
   actionSession.submitting = false;
   captureElement.active = false;
   captureElement.label = 'Choose Enroll or Verify to begin capture.';
-  captureElement.confirmLabel = 'Confirm capture';
+  captureElement.confirmLabel = 'Accept';
 }
 
 function handleActionError(action, error, statusMessage) {

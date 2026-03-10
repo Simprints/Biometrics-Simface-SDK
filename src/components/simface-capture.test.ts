@@ -222,7 +222,7 @@ describe('<simface-capture>', () => {
     }
 
       const confirmButton = [...(element.shadowRoot?.querySelectorAll('button') ?? [])]
-      .find((button) => button.textContent?.includes('Use this capture')) as HTMLButtonElement | undefined;
+      .find((button) => button.textContent?.includes('Accept')) as HTMLButtonElement | undefined;
 
     expect(confirmButton).toBeDefined();
     expect(element.shadowRoot?.textContent).toContain('Best frame captured. Review and confirm this photo.');

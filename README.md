@@ -75,6 +75,46 @@ if (result.match) {
 }
 ```
 
+### 5. Customize capture behavior
+
+Both `enroll()` and `verify()` accept an optional third argument to control how the camera capture UI is presented. Define the options once and pass them to either call:
+
+```javascript
+const captureOptions = {
+  // 'popup' (default) opens a fullscreen modal dialog.
+  // 'embedded' renders the capture component inline in a host container.
+  presentation: 'popup',
+
+  // 'auto-preferred' (default) uses automatic face-framing capture when supported,
+  // falling back to manual shutter. 'manual-only' always shows a manual shutter button.
+  capturePreference: 'auto-preferred',
+
+  // When true (default), falls back to the device media/file picker if camera access
+  // is unavailable (e.g. denied permissions, or WhatsApp in-app browser).
+  allowMediaPickerFallback: true,
+
+  // Only used when presentation is 'embedded'. Specifies the host container element
+  // (CSS selector string or HTMLElement). Ignored for 'popup' mode.
+  container: '#capture-slot',
+
+  // Optional UI label overrides (apply to both popup and embedded).
+  label: 'Take a selfie for verification',
+  confirmLabel: 'Use this photo',
+};
+
+const enrollResult = await enroll(config, 'unique-user-id', captureOptions);
+const verifyResult = await verify(config, 'unique-user-id', captureOptions);
+```
+
+| Option | Type | Default | Notes |
+|--------|------|---------|-------|
+| `presentation` | `'popup' \| 'embedded'` | `'popup'` | Popup opens a fullscreen modal; embedded renders inline |
+| `capturePreference` | `'auto-preferred' \| 'manual-only'` | `'auto-preferred'` | Controls auto vs manual shutter |
+| `allowMediaPickerFallback` | `boolean` | `true` | Falls back to file picker if camera is unavailable |
+| `container` | `HTMLElement \| string` | — | Required for embedded via top-level helpers; ignored for popup |
+| `label` | `string` | `'Capturing Face'` | Instructional text shown during capture |
+| `confirmLabel` | `string` | `'Accept'` | Confirm button label in preview state |
+
 ## Try the local demo
 
 Build the SDK at the repository root, then run the demo:
@@ -89,31 +129,6 @@ npm run dev
 ```
 
 The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
-
-## Capture strategy
-
-The top-level SDK helpers accept an optional third `captureOptions` argument so the host can choose popup vs embedded capture and tune the fallback chain:
-
-```javascript
-import { enroll } from '@simprints/simface-sdk';
-
-const result = await enroll(config, 'unique-user-id', {
-  presentation: 'embedded',
-  container: '#capture-slot',
-  capturePreference: 'auto-preferred',
-  allowMediaPickerFallback: true,
-  label: 'Capture a face for enrollment',
-  confirmLabel: 'Confirm enrollment capture',
-});
-```
-
-Supported capture planning options:
-
-- `presentation: 'popup' | 'embedded'`
-- `capturePreference: 'auto-preferred' | 'manual-only'`
-- `allowMediaPickerFallback: boolean`
-- `container: HTMLElement | string` (required for top-level embedded capture)
-- `label` / `confirmLabel`
 
 ## Web Component
 
@@ -157,9 +172,9 @@ For more control over the UI, use the `<simface-capture>` Web Component directly
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `label` | String | `"Take a selfie"` | Instructional text shown on the capture button |
+| `label` | String | `"Capturing Face"` | Instructional text shown on the capture button |
 | `embedded` | Boolean | `false` | Runs the component inline instead of delegating to the popup capture service |
-| `confirm-label` | String | `"Use this capture"` | Confirm button label used in preview state |
+| `confirm-label` | String | `"Accept"` | Confirm button label used in preview state |
 | `capture-preference` | `"auto-preferred" \| "manual-only"` | `"auto-preferred"` | Whether auto capture should be preferred or disabled |
 | `allow-media-picker-fallback` | Boolean | `true` | Whether the component may fall back to the media picker if camera capture is unavailable |
 
