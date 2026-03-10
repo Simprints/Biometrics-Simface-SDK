@@ -12,7 +12,7 @@
  */
 
 import type {
-  SimFaceCaptureOptions,
+  SimFaceCaptureElement,
   SimFaceWorkflowOptions,
   SimFaceConfig,
   EnrollResult,
@@ -24,7 +24,6 @@ import { captureFromCamera } from './services/camera.js';
 // Re-export types and component for consumers
 export type {
   CapturePreference,
-  SimFaceCaptureOptions,
   SimFaceCaptureElement,
   SimFaceWorkflowOptions,
   SimFaceConfig,
@@ -52,7 +51,7 @@ export async function enroll(
   config: SimFaceConfig,
   clientId: string,
   workflowOptions?: SimFaceWorkflowOptions,
-  captureOptions?: SimFaceCaptureOptions,
+  captureElement?: SimFaceCaptureElement,
 ): Promise<EnrollResult> {
   const client = new SimFaceAPIClient(config);
 
@@ -60,7 +59,7 @@ export async function enroll(
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck(workflowOptions, captureOptions);
+  const blob = await captureWithQualityCheck(workflowOptions, captureElement);
   if (!blob) {
     return { success: false, clientId, message: 'Capture cancelled by user' };
   }
@@ -90,7 +89,7 @@ export async function verify(
   config: SimFaceConfig,
   clientId: string,
   workflowOptions?: SimFaceWorkflowOptions,
-  captureOptions?: SimFaceCaptureOptions,
+  captureElement?: SimFaceCaptureElement,
 ): Promise<VerifyResult> {
   const client = new SimFaceAPIClient(config);
 
@@ -98,7 +97,7 @@ export async function verify(
   await client.validateAPIKey();
 
   // Capture face image
-  const blob = await captureWithQualityCheck(workflowOptions, captureOptions);
+  const blob = await captureWithQualityCheck(workflowOptions, captureElement);
   if (!blob) {
     return { match: false, score: 0, threshold: 0, message: 'Capture cancelled by user' };
   }
@@ -111,7 +110,7 @@ export async function verify(
  */
 async function captureWithQualityCheck(
   workflowOptions?: SimFaceWorkflowOptions,
-  captureOptions?: SimFaceCaptureOptions,
+  captureElement?: SimFaceCaptureElement,
 ): Promise<Blob | null> {
-  return captureFromCamera(workflowOptions, captureOptions);
+  return captureFromCamera(workflowOptions, captureElement);
 }

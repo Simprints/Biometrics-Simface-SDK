@@ -12,6 +12,17 @@ The capture flow is planned explicitly as: auto camera -> manual camera -> media
 - popup capture: the SDK opens and manages its own modal capture flow
 - embedded capture: the SDK runs capture inside a host-provided `simface-capture` element
 
+## Face Quality Checks
+
+The SDK automatically performs these checks on captured images before submission:
+
+1. Face presence - at least one face must be detected.
+2. Single face - only one face should be in the frame.
+3. Face size - face must not be too close or too far.
+4. Centering - face must be approximately centered in the frame.
+
+If a check fails, the user is prompted with specific guidance and asked to retake the photo.
+
 ## Quick Start
 
 ### 1. Include the SDK
@@ -83,11 +94,11 @@ if (result.match) {
 
 Both functions now accept two optional configuration objects:
 - `workflowOptions`: capture behavior that applies to both popup and embedded flows
-- `captureOptions`: embedded `simface-capture` settings; if this object is present, the SDK uses embedded mode
+- `captureElement`: an existing `simface-capture` element; if this argument is present, the SDK uses embedded mode
 
 #### Popup capture
 
-If you omit `captureOptions`, the SDK opens its popup capture UI:
+If you omit `captureElement`, the SDK opens its popup capture UI:
 
 ```javascript
 const workflowOptions = {
@@ -101,7 +112,19 @@ const verifyResult = await verify(config, 'unique-user-id', workflowOptions);
 
 #### Embedded capture
 
-If you want capture inline in your page, create a `simface-capture` element and pass it as `captureOptions.component`. The SDK still owns the capture lifecycle; it just renders the UI inline instead of in a popup.
+If you want capture inline in your page, create a `simface-capture` element and pass it as `captureElement`. The SDK still owns the capture lifecycle; it just renders the UI inline instead of in a popup.
+
+```html
+<simface-capture
+        embedded
+        capture-preference="auto-preferred"
+        label="Take a selfie for verification"
+        capture-label="Snap photo"
+        retake-label="Take another"
+        confirm-label="Use this photo"
+        retry-label="Start over"
+></simface-capture>
+```
 
 ```javascript
 const workflowOptions = {
@@ -111,12 +134,8 @@ const workflowOptions = {
 
 const captureElement = document.querySelector('simface-capture');
 
-const captureOptions = {
-  component: captureElement,
-};
-
-const enrollResult = await enroll(config, 'unique-user-id', workflowOptions, captureOptions);
-const verifyResult = await verify(config, 'unique-user-id', workflowOptions, captureOptions);
+const enrollResult = await enroll(config, 'unique-user-id', workflowOptions, captureElement);
+const verifyResult = await verify(config, 'unique-user-id', workflowOptions, captureElement);
 ```
 
 | workflowOptions | Type | Default | Notes |
@@ -124,17 +143,13 @@ const verifyResult = await verify(config, 'unique-user-id', workflowOptions, cap
 | `capturePreference` | `'auto-preferred' \| 'manual-only'` | `'auto-preferred'` | Controls auto vs manual shutter |
 | `allowMediaPickerFallback` | `boolean` | `true` | Falls back to file picker if camera is unavailable |
 
-| captureOptions | Type | Default | Notes |
-|--------|------|---------|-------|
-| `component` | `SimFaceCaptureElement` | — | Existing `simface-capture` element used for embedded capture |
-
 ## API Reference
 
 ### Primary SDK API
 
 The main integration surface is:
-- `enroll(config, clientId, workflowOptions?, captureOptions?)`
-- `verify(config, clientId, workflowOptions?, captureOptions?)`
+- `enroll(config, clientId, workflowOptions?, captureElement?)`
+- `verify(config, clientId, workflowOptions?, captureElement?)`
 
 These functions:
 - run the camera capture workflow
@@ -142,7 +157,7 @@ These functions:
 - perform face quality validation
 - call the backend API for enrollment or verification
 
-### `enroll(config, clientId, workflowOptions?, captureOptions?): Promise<EnrollResult>`
+### `enroll(config, clientId, workflowOptions?, captureElement?): Promise<EnrollResult>`
 
 Opens the camera, captures a face image with quality validation, and enrolls the user.
 
@@ -153,10 +168,10 @@ Parameters:
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
-| `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
+| `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
 Returns: `EnrollResult`
 
-### `verify(config, clientId, workflowOptions?, captureOptions?): Promise<VerifyResult>`
+### `verify(config, clientId, workflowOptions?, captureElement?): Promise<VerifyResult>`
 
 Opens the camera, captures a face image, and verifies against the enrolled face.
 
@@ -167,7 +182,7 @@ Parameters:
 | `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
-| `captureOptions` | `SimFaceCaptureOptions` | Optional embedded `simface-capture` configuration |
+| `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
 Returns: `VerifyResult`
 
 ### `SimFaceAPIClient` and the backend REST interface
@@ -282,14 +297,6 @@ This is more flexible, but it also means the host owns more of the workflow.
 }
 ```
 
-### `SimFaceCaptureOptions`
-
-```typescript
-{
-  component: SimFaceCaptureElement;
-}
-```
-
 ### `EnrollResult`
 
 ```typescript
@@ -339,17 +346,6 @@ Response: `{ "match": true, "score": 0.85, "threshold": 0.6 }`
 Health check endpoint.
 
 Response: `{ "status": "ok" }`
-
-## Face Quality Checks
-
-The SDK automatically performs these checks on captured images before submission:
-
-1. Face presence - at least one face must be detected.
-2. Single face - only one face should be in the frame.
-3. Face size - face must not be too close or too far.
-4. Centering - face must be approximately centered in the frame.
-
-If a check fails, the user is prompted with specific guidance and asked to retake the photo.
 
 ## Browser Compatibility
 

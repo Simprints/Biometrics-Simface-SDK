@@ -16,7 +16,6 @@ import {
 } from '../shared/capture-runtime.js';
 import type {
   SimFaceCaptureElement,
-  SimFaceCaptureOptions,
   SimFaceWorkflowOptions,
 } from '../types/index.js';
 
@@ -28,11 +27,11 @@ const CAPTURE_DIALOG_Z_INDEX = '2147483647';
  */
 export async function captureFromCamera(
   workflowOptions?: SimFaceWorkflowOptions,
-  captureOptions?: SimFaceCaptureOptions,
+  captureElement?: SimFaceCaptureElement,
 ): Promise<Blob | null> {
-  const normalizedOptions = normalizeCaptureOptions(workflowOptions, captureOptions?.component);
+  const normalizedOptions = normalizeCaptureOptions(workflowOptions, captureElement);
 
-  if (captureOptions) {
+  if (captureElement) {
     return captureFromEmbeddedComponent(normalizedOptions);
   }
 

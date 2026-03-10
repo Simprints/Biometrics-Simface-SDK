@@ -51,12 +51,6 @@ export interface SimFaceCaptureElement extends HTMLElement {
   startCapture: () => Promise<void>;
 }
 
-/** Embedded capture UI options for the top-level SDK helpers. */
-export interface SimFaceCaptureOptions {
-  /** Existing `simface-capture` element that should host the embedded flow. */
-  component: SimFaceCaptureElement;
-}
-
 /** Result of API key validation. */
 export interface ValidateResult {
   valid: boolean;

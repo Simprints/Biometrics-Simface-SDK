@@ -85,7 +85,7 @@ describe('camera service', () => {
 
       const capturePromise = captureFromCamera(
         { capturePreference: 'manual-only' },
-        { component },
+        component,
       );
       await flushMicrotasks(10);
       await component.updateComplete;

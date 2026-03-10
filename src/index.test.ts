@@ -51,9 +51,6 @@ describe('SDK entrypoints', () => {
       capturePreference: 'manual-only' as const,
     };
     const captureComponent = document.createElement('simface-capture') as SimFaceCaptureElement;
-    const captureOptions = {
-      component: captureComponent,
-    };
 
     captureMocks.captureFromCamera.mockResolvedValue(blob);
     apiClientMethodMocks.enroll.mockResolvedValue({
@@ -61,9 +58,9 @@ describe('SDK entrypoints', () => {
       clientId: 'user-1',
     });
 
-    const result = await enroll(config, 'user-1', workflowOptions, captureOptions);
+    const result = await enroll(config, 'user-1', workflowOptions, captureComponent);
 
-    expect(captureMocks.captureFromCamera).toHaveBeenCalledWith(workflowOptions, captureOptions);
+    expect(captureMocks.captureFromCamera).toHaveBeenCalledWith(workflowOptions, captureComponent);
     expect(apiClientMethodMocks.validateAPIKey).toHaveBeenCalledTimes(1);
     expect(apiClientMethodMocks.enroll).toHaveBeenCalledWith('user-1', blob);
     expect(result).toEqual({
