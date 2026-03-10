@@ -8,6 +8,7 @@ const faceDetectionMocks = vi.hoisted(() => ({
 
 vi.mock('../services/face-detection.js', () => faceDetectionMocks);
 
+import '../components/simface-capture.js';
 import { blobToDataURL, captureFromCamera } from '../services/camera.js';
 import type { FaceQualityResult } from '../types/index.js';
 
@@ -23,6 +24,11 @@ const originalClearTimeout = window.clearTimeout;
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
 const originalImage = window.Image;
+
+type SimFaceCaptureElement = HTMLElement & {
+  shadowRoot: ShadowRoot;
+  updateComplete: Promise<boolean>;
+};
 
 describe('camera service', () => {
   beforeEach(() => {
@@ -104,7 +110,8 @@ describe('camera service', () => {
       const capturePromise = captureFromCamera();
       await flushMicrotasks();
 
-      const video = document.querySelector('video') as HTMLVideoElement | null;
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
       expect(video).not.toBeNull();
       if (!video) {
         throw new Error('Video element was not rendered.');
@@ -125,9 +132,10 @@ describe('camera service', () => {
         await flushMicrotasks();
       }
 
-      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      await component.updateComplete;
+      const confirmButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="confirm"]');
       expect(confirmButton).not.toBeNull();
-      expect(document.body.textContent).toContain('Best frame captured. Review and confirm this photo.');
+      expect(component.shadowRoot.textContent).toContain('Best frame captured. Review and confirm this photo.');
       confirmButton?.dispatchEvent(new MouseEvent('click'));
 
       const result = await capturePromise;
@@ -140,6 +148,40 @@ describe('camera service', () => {
         audio: false,
       });
       expect(stop).toHaveBeenCalled();
+    });
+
+    it('sets color-scheme light on the popup overlay to prevent iOS dark-mode flicker', async () => {
+      setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
+
+      const stop = vi.fn();
+      const getUserMedia = vi.fn().mockResolvedValue({
+        getTracks: () => [{ stop }],
+      } as unknown as MediaStream);
+
+      setMediaDevices({ getUserMedia } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockResolvedValue({});
+      faceDetectionMocks.assessFaceQualityForVideo.mockResolvedValue(createQualityResult());
+
+      const capturePromise = captureFromCamera();
+      await flushMicrotasks(20);
+
+      const overlay = document.querySelector('[data-simface-camera-overlay]') as HTMLElement | null;
+      expect(overlay).not.toBeNull();
+      expect(overlay?.style.colorScheme).toBe('light');
+
+      // Clean up: cancel the capture
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
+      if (video) {
+        Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+        Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+        video.dispatchEvent(new Event('loadedmetadata'));
+        await flushMicrotasks(10);
+      }
+      await component.updateComplete;
+      const cancelButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="cancel"]');
+      cancelButton?.dispatchEvent(new MouseEvent('click'));
+      await capturePromise;
     });
 
     it('falls back to manual capture when realtime guidance is unavailable', async () => {
@@ -157,7 +199,8 @@ describe('camera service', () => {
       const capturePromise = captureFromCamera();
       await flushMicrotasks();
 
-      const video = document.querySelector('video') as HTMLVideoElement | null;
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
       expect(video).not.toBeNull();
       if (!video) {
         throw new Error('Video element was not rendered.');
@@ -167,16 +210,17 @@ describe('camera service', () => {
       Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
       video.dispatchEvent(new Event('loadedmetadata'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      const captureButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="capture"]');
       expect(captureButton).not.toBeNull();
-      expect(captureButton?.style.display).toBe('inline-flex');
       expect(captureButton?.disabled).toBe(false);
 
       captureButton?.dispatchEvent(new MouseEvent('click'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      const confirmButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="confirm"]');
       expect(confirmButton).not.toBeNull();
       confirmButton?.dispatchEvent(new MouseEvent('click'));
 
@@ -208,7 +252,8 @@ describe('camera service', () => {
       const capturePromise = captureFromCamera();
       await flushMicrotasks();
 
-      const video = document.querySelector('video') as HTMLVideoElement | null;
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
       expect(video).not.toBeNull();
       if (!video) {
         throw new Error('Video element was not rendered.');
@@ -218,30 +263,34 @@ describe('camera service', () => {
       Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
       video.dispatchEvent(new Event('loadedmetadata'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      const captureButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="capture"]');
       expect(captureButton).not.toBeNull();
       expect(captureButton?.disabled).toBe(false);
 
       captureButton?.dispatchEvent(new MouseEvent('click'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const previewImage = document.querySelector('img[alt="Captured face preview"]') as HTMLImageElement | null;
+      const previewImage = queryShadow<HTMLImageElement>(component, '.preview-img');
       expect(previewImage).not.toBeNull();
-      expect(document.querySelector('video')).toBe(video);
+      expect(queryShadow(component, 'video')).toBe(video);
 
-      const retakeButton = document.querySelector('[data-simface-action="retake"]') as HTMLButtonElement | null;
+      const retakeButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="retake"]');
       expect(retakeButton).not.toBeNull();
       retakeButton?.dispatchEvent(new MouseEvent('click'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      expect(document.querySelector('img[alt="Captured face preview"]')).toBeNull();
-      expect(document.querySelector('video')).toBe(video);
+      expect(queryShadow(component, '.preview-img')?.classList.contains('hidden')).toBe(true);
+      expect(queryShadow(component, 'video')).toBe(video);
 
       captureButton?.dispatchEvent(new MouseEvent('click'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      const confirmButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="confirm"]');
       expect(confirmButton).not.toBeNull();
       confirmButton?.dispatchEvent(new MouseEvent('click'));
 
@@ -289,7 +338,8 @@ describe('camera service', () => {
       const capturePromise = captureFromCamera();
       await flushMicrotasks();
 
-      const video = document.querySelector('video') as HTMLVideoElement | null;
+      const component = await getPopupComponent();
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
       expect(video).not.toBeNull();
       if (!video) {
         throw new Error('Video element was not rendered.');
@@ -299,19 +349,20 @@ describe('camera service', () => {
       Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
       video.dispatchEvent(new Event('loadedmetadata'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
       // Auto-capture probe must not have been called for WhatsApp UA
       expect(faceDetectionMocks.getVideoDetector).not.toHaveBeenCalled();
 
       // Manual capture button should be visible (not auto-capture countdown)
-      const captureButton = document.querySelector('[data-simface-action="capture"]') as HTMLButtonElement | null;
+      const captureButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="capture"]');
       expect(captureButton).not.toBeNull();
-      expect(captureButton?.style.display).toBe('inline-flex');
 
       captureButton?.dispatchEvent(new MouseEvent('click'));
       await flushMicrotasks(10);
+      await component.updateComplete;
 
-      const confirmButton = document.querySelector('[data-simface-action="confirm"]') as HTMLButtonElement | null;
+      const confirmButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="confirm"]');
       expect(confirmButton).not.toBeNull();
       confirmButton?.dispatchEvent(new MouseEvent('click'));
 
@@ -401,6 +452,23 @@ async function flushMicrotasks(iterations = 5) {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve();
   }
+}
+
+async function getPopupComponent(): Promise<SimFaceCaptureElement> {
+  await flushMicrotasks(20);
+  const component = document.querySelector('simface-capture') as SimFaceCaptureElement | null;
+  if (!component) {
+    throw new Error('simface-capture element was not rendered in the popup overlay.');
+  }
+  await component.updateComplete;
+  return component;
+}
+
+function queryShadow<T extends Element>(
+  component: SimFaceCaptureElement,
+  selector: string,
+): T | null {
+  return component.shadowRoot?.querySelector<T>(selector) ?? null;
 }
 
 function createMockImageConstructor(): typeof Image {

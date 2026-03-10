@@ -1,6 +1,6 @@
 import './styles.css';
 import '@simprints/simface-sdk';
-import { SimFaceAPIClient } from '@simprints/simface-sdk';
+import { SimFaceAPIClient, enroll as sdkEnroll, verify as sdkVerify } from '@simprints/simface-sdk';
 
 const STORAGE_KEY = 'simface-demo-config';
 const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
@@ -10,6 +10,7 @@ const defaults = {
   projectId: '',
   apiKey: '',
   clientId: 'demo-user-123',
+  presentationMode: 'embedded',
 };
 
 const fields = {
@@ -17,6 +18,7 @@ const fields = {
   projectId: document.querySelector('#project-id'),
   apiKey: document.querySelector('#api-key'),
   clientId: document.querySelector('#client-id'),
+  presentationMode: document.querySelector('#presentation-mode'),
 };
 
 const buttons = {
@@ -31,6 +33,7 @@ const statusCopy = document.querySelector('#status-copy');
 const resultOutput = document.querySelector('#result-output');
 const eventLog = document.querySelector('#event-log');
 const captureElement = document.querySelector('#inline-capture');
+const captureCard = document.querySelector('.card-capture');
 
 const actionSession = {
   action: null,
@@ -42,6 +45,7 @@ loadConfig();
 initializeCaptureComponent();
 wireInputPersistence();
 wireActions();
+updateCaptureCardVisibility();
 
 function initializeCaptureComponent() {
   captureElement.embedded = true;
@@ -71,6 +75,16 @@ function wireInputPersistence() {
   for (const field of Object.values(fields)) {
     field.addEventListener('input', persistConfig);
   }
+
+  fields.presentationMode.addEventListener('change', () => {
+    persistConfig();
+    updateCaptureCardVisibility();
+  });
+}
+
+function updateCaptureCardVisibility() {
+  const isEmbedded = fields.presentationMode.value === 'embedded';
+  captureCard.style.display = isEmbedded ? '' : 'none';
 }
 
 function persistConfig() {
@@ -94,6 +108,7 @@ function getConfig() {
     projectId: fields.projectId.value.trim(),
     apiKey: fields.apiKey.value.trim(),
     clientId: fields.clientId.value.trim(),
+    presentationMode: fields.presentationMode.value,
   };
 }
 
@@ -160,6 +175,15 @@ function startComponentCapture(action) {
   }
 
   persistConfig();
+
+  if (config.presentationMode === 'popup') {
+    startPopupCapture(action, config);
+  } else {
+    startEmbeddedCapture(action, config);
+  }
+}
+
+function startEmbeddedCapture(action, config) {
   actionSession.action = action;
   actionSession.config = config;
   actionSession.submitting = false;
@@ -172,6 +196,33 @@ function startComponentCapture(action) {
   setBusy(action, true);
   setStatus('running', `${capitalize(action)} flow started. The SDK capture component is active in the page.`);
   appendLog('info', `${capitalize(action)} flow started in the embedded SDK component.`);
+}
+
+async function startPopupCapture(action, config) {
+  const sdkConfig = { apiUrl: config.apiUrl, projectId: config.projectId, apiKey: config.apiKey };
+  const captureOptions = { presentation: 'popup' };
+
+  setBusy(action, true);
+  setStatus('running', `${capitalize(action)} flow started. The SDK popup dialog will open.`);
+  appendLog('info', `${capitalize(action)} flow started in popup mode.`);
+
+  try {
+    const result = action === 'enroll'
+      ? await sdkEnroll(sdkConfig, config.clientId, captureOptions)
+      : await sdkVerify(sdkConfig, config.clientId, captureOptions);
+
+    const summary = summarizeActionResult(action, result);
+    setStatus(summary.kind, summary.message);
+    setResult({ action, ok: true, result });
+    appendLog(summary.logKind, `${summary.message} Capture was completed via popup.`, result);
+  } catch (error) {
+    const message = describeError(error);
+    setStatus('error', message);
+    setResult({ action, ok: false, error: message });
+    appendLog('error', message);
+  } finally {
+    setBusy(action, false);
+  }
 }
 
 async function handleComponentCaptured(event) {
