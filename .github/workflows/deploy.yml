@@ -84,7 +84,7 @@ jobs:
           npm install
           npm run build
         env:
-          VITE_BASE_PATH: /LegoDay-Simprints-IDV-Frontend/
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
