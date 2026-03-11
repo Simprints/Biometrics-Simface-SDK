@@ -8,7 +8,6 @@ import {
 describe('capture flow planning', () => {
   it('prefers auto capture, then manual capture, then media picker when all strategies are available', async () => {
     const options = normalizeCaptureOptions({
-      presentation: 'popup',
       capturePreference: 'auto-preferred',
     });
     const capabilities = await resolveCaptureCapabilities({
@@ -26,7 +25,6 @@ describe('capture flow planning', () => {
 
   it('falls back to manual capture and media picker when auto capture is unavailable', async () => {
     const options = normalizeCaptureOptions({
-      presentation: 'popup',
       capturePreference: 'auto-preferred',
     });
     const capabilities = await resolveCaptureCapabilities({
@@ -60,9 +58,7 @@ describe('capture flow planning', () => {
   });
 
   it('uses the media picker as the terminal fallback when no camera APIs are available', async () => {
-    const options = normalizeCaptureOptions({
-      presentation: 'embedded',
-    });
+    const options = normalizeCaptureOptions(undefined);
     const capabilities = await resolveCaptureCapabilities({
       capturePreference: options.capturePreference,
       hasMediaDevices: false,

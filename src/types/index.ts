@@ -27,23 +27,29 @@ export interface VerifyResult {
   notEnrolled?: boolean;
 }
 
-export type CapturePresentation = 'popup' | 'embedded';
 export type CapturePreference = 'auto-preferred' | 'manual-only';
 
-/** Optional capture behavior for SDK convenience APIs and the capture component. */
-export interface SimFaceCaptureOptions {
-  /** Whether capture should be shown in a popup/modal flow or in an embedded component. */
-  presentation?: CapturePresentation;
+/** Cross-presentation capture behavior for the top-level SDK helpers. */
+export interface SimFaceWorkflowOptions {
   /** Whether auto capture should be preferred when supported, or disabled entirely. */
   capturePreference?: CapturePreference;
   /** Whether the flow may fall back to a media picker if camera capture is unavailable. */
   allowMediaPickerFallback?: boolean;
-  /** Host container for embedded capture when using the top-level SDK helpers. */
-  container?: HTMLElement | string;
-  /** Optional capture label override. */
-  label?: string;
-  /** Optional confirm button label override. */
-  confirmLabel?: string;
+}
+
+/** Public surface of the `simface-capture` element used by the top-level SDK helpers. */
+export interface SimFaceCaptureElement extends HTMLElement {
+  embedded: boolean;
+  active: boolean;
+  label: string;
+  idleFeedbackLabel: string;
+  confirmLabel: string;
+  captureLabel: string;
+  retakeLabel: string;
+  retryLabel: string;
+  capturePreference: CapturePreference;
+  allowMediaPickerFallback: boolean;
+  startCapture: () => Promise<void>;
 }
 
 /** Result of API key validation. */

@@ -14,31 +14,25 @@ import {
   blobToImage,
   captureFromFileInput,
 } from '../shared/capture-runtime.js';
-import type { SimFaceCaptureOptions } from '../types/index.js';
+import type {
+  SimFaceCaptureElement,
+  SimFaceWorkflowOptions,
+} from '../types/index.js';
 
 const CAPTURE_DIALOG_Z_INDEX = '2147483647';
 
-type CaptureElement = HTMLElement & {
-  embedded: boolean;
-  active: boolean;
-  label: string;
-  confirmLabel: string;
-  capturePreference: 'auto-preferred' | 'manual-only';
-  allowMediaPickerFallback: boolean;
-  startCapture: () => Promise<void>;
-};
-
 /**
- * Opens the configured capture presentation and returns a confirmed image Blob,
+ * Opens the configured capture flow and returns a confirmed image Blob,
  * or null if the user cancels.
  */
 export async function captureFromCamera(
-  options?: SimFaceCaptureOptions,
+  workflowOptions?: SimFaceWorkflowOptions,
+  captureElement?: SimFaceCaptureElement,
 ): Promise<Blob | null> {
-  const captureOptions = normalizeCaptureOptions(options);
+  const normalizedOptions = normalizeCaptureOptions(workflowOptions, captureElement);
 
-  if (captureOptions.presentation === 'embedded') {
-    return captureFromEmbeddedComponent(captureOptions);
+  if (captureElement) {
+    return captureFromEmbeddedComponent(normalizedOptions);
   }
 
   // For popup, skip the expensive auto-capture probe (MediaPipe load) here.
@@ -49,14 +43,14 @@ export async function captureFromCamera(
   const supportsMediaDevices = typeof navigator.mediaDevices?.getUserMedia === 'function';
 
   if (!supportsMediaDevices) {
-    if (captureOptions.allowMediaPickerFallback) {
+    if (normalizedOptions.allowMediaPickerFallback) {
       return captureFromFileInput();
     }
 
     throw new Error('No supported capture strategy is available in this environment.');
   }
 
-  return captureFromPopupCamera(captureOptions);
+  return captureFromPopupCamera(normalizedOptions);
 }
 
 async function captureFromEmbeddedComponent(
@@ -64,19 +58,9 @@ async function captureFromEmbeddedComponent(
 ): Promise<Blob | null> {
   await import('../components/simface-capture.js');
 
-  const host = resolveEmbeddedCaptureHost(options.container);
-  const usingExistingElement = host.tagName.toLowerCase() === 'simface-capture';
-  const element = (usingExistingElement
-    ? host
-    : document.createElement('simface-capture')) as CaptureElement;
-
-  if (!usingExistingElement) {
-    host.appendChild(element);
-  }
+  const element = resolveEmbeddedCaptureComponent(options.component);
 
   element.embedded = true;
-  element.label = options.label;
-  element.confirmLabel = options.confirmLabel;
   element.capturePreference = options.capturePreference;
   element.allowMediaPickerFallback = options.allowMediaPickerFallback;
 
@@ -86,10 +70,6 @@ async function captureFromEmbeddedComponent(
       element.removeEventListener('simface-cancelled', handleCancelled as EventListener);
       element.removeEventListener('simface-error', handleError as EventListener);
       element.active = false;
-
-      if (!usingExistingElement) {
-        element.remove();
-      }
     };
 
     const handleCaptured = (event: CustomEvent<{ imageBlob: Blob }>) => {
@@ -118,21 +98,18 @@ async function captureFromEmbeddedComponent(
   });
 }
 
-function resolveEmbeddedCaptureHost(container: HTMLElement | string | undefined): HTMLElement {
-  if (!container) {
-    throw new Error('Embedded capture requires a container element or selector.');
+function resolveEmbeddedCaptureComponent(
+  component: SimFaceCaptureElement | undefined,
+): SimFaceCaptureElement {
+  if (!component) {
+    throw new Error('Embedded capture requires a simface-capture component.');
   }
 
-  if (container instanceof HTMLElement) {
-    return container;
+  if (component.tagName.toLowerCase() !== 'simface-capture') {
+    throw new Error('Embedded capture requires a simface-capture component.');
   }
 
-  const element = document.querySelector<HTMLElement>(container);
-  if (!element) {
-    throw new Error(`No element matched the embedded capture container selector "${container}".`);
-  }
-
-  return element;
+  return component;
 }
 
 async function captureFromPopupCamera(
@@ -160,9 +137,12 @@ async function captureFromPopupCamera(
       colorScheme: 'light',
     });
 
-    const element = document.createElement('simface-capture') as CaptureElement;
+    const element = document.createElement('simface-capture') as SimFaceCaptureElement;
     element.label = options.label;
     element.confirmLabel = options.confirmLabel;
+    element.captureLabel = options.captureLabel;
+    element.retakeLabel = options.retakeLabel;
+    element.retryLabel = options.retryLabel;
     element.capturePreference = options.capturePreference;
     element.allowMediaPickerFallback = options.allowMediaPickerFallback;
 

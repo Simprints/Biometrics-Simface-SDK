@@ -9,8 +9,12 @@ import {
   buildCapturePlan,
   normalizeCaptureOptions,
   resolveCaptureCapabilities,
+  DEFAULT_CAPTURE_LABEL,
+  DEFAULT_IDLE_FEEDBACK_LABEL,
   DEFAULT_LABEL,
   DEFAULT_CONFIRM_LABEL,
+  DEFAULT_RETAKE_LABEL,
+  DEFAULT_RETRY_LABEL,
   type CapturePlanStep,
 } from '../shared/capture-flow.js';
 import {
@@ -40,9 +44,13 @@ type FeedbackTone = 'neutral' | 'success' | 'error' | 'manual';
 @customElement('simface-capture')
 export class SimFaceCapture extends LitElement {
   @property({ type: String }) label = DEFAULT_LABEL;
+  @property({ type: String, attribute: 'idle-feedback-label' }) idleFeedbackLabel = DEFAULT_IDLE_FEEDBACK_LABEL;
   @property({ type: Boolean, reflect: true }) embedded = false;
   @property({ type: Boolean, reflect: true }) active = false;
   @property({ type: String, attribute: 'confirm-label' }) confirmLabel = DEFAULT_CONFIRM_LABEL;
+  @property({ type: String, attribute: 'capture-label' }) captureLabel = DEFAULT_CAPTURE_LABEL;
+  @property({ type: String, attribute: 'retake-label' }) retakeLabel = DEFAULT_RETAKE_LABEL;
+  @property({ type: String, attribute: 'retry-label' }) retryLabel = DEFAULT_RETRY_LABEL;
   @property({ type: String, attribute: 'capture-preference' })
   capturePreference: CapturePreference = 'auto-preferred';
   @property({ type: Boolean, attribute: 'allow-media-picker-fallback' })
@@ -50,7 +58,7 @@ export class SimFaceCapture extends LitElement {
 
   @state() private captureState: CaptureState = 'idle';
   @state() private errorMessage = '';
-  @state() private feedbackMessage = 'Start a capture to see camera guidance here.';
+  @state() private feedbackMessage = DEFAULT_IDLE_FEEDBACK_LABEL;
   @state() private feedbackTone: FeedbackTone = 'neutral';
   @state() private previewUrl = '';
   @state() private qualityResult: FaceQualityResult | null = null;
@@ -319,6 +327,12 @@ export class SimFaceCapture extends LitElement {
     this.stopSession();
   }
 
+  protected willUpdate(changedProperties: Map<string, unknown>) {
+    if (changedProperties.has('idleFeedbackLabel') && this.captureState === 'idle') {
+      this.feedbackMessage = this.idleFeedbackLabel;
+    }
+  }
+
   updated(changedProperties: Map<string, unknown>) {
     if (!changedProperties.has('active') || this.pendingActiveSync) {
       return;
@@ -371,9 +385,8 @@ export class SimFaceCapture extends LitElement {
         : ''}
 
       <p class="capture-copy">${this.label}</p>
-
       ${this.captureState === 'idle'
-        ? html`<p class="capture-copy">Waiting for the host page to start capture.</p>`
+        ? ''
         : html`
             <div class="stage">
               <video
@@ -408,13 +421,13 @@ export class SimFaceCapture extends LitElement {
         ${this.captureState === 'live'
           ? html`
               ${this.captureMode === 'manual'
-                ? html`<button class="btn btn-primary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>Take photo</button>`
+                ? html`<button class="btn btn-primary" data-simface-action="capture" ?disabled=${!this.canTakePhoto} @click=${this.handleManualCapture}>${this.captureLabel}</button>`
                 : ''}
             `
           : ''}
         ${this.captureState === 'preview'
           ? html`
-              <button class="btn btn-retake" data-simface-action="retake" @click=${this.handleRetake}>Retake</button>
+              <button class="btn btn-retake" data-simface-action="retake" @click=${this.handleRetake}>${this.retakeLabel}</button>
               ${this.qualityResult?.passesQualityChecks === false
                 ? ''
                 : html`<button class="btn btn-confirm" data-simface-action="confirm" @click=${this.handleConfirm}>${this.confirmLabel}</button>`}
@@ -422,7 +435,7 @@ export class SimFaceCapture extends LitElement {
           : ''}
         ${this.captureState === 'error'
           ? html`
-              <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>Try again</button>
+              <button class="btn btn-primary" data-simface-action="retry" @click=${this.beginCapture}>${this.retryLabel}</button>
             `
           : ''}
       </div>
@@ -441,12 +454,15 @@ export class SimFaceCapture extends LitElement {
     this.feedbackTone = 'neutral';
 
     const options = normalizeCaptureOptions({
-      presentation: 'embedded',
       capturePreference: this.capturePreference,
       allowMediaPickerFallback: this.allowMediaPickerFallback,
-      label: this.label,
-      confirmLabel: this.confirmLabel,
-    });
+    }, this);
+    options.label = this.label;
+    options.idleFeedbackLabel = this.idleFeedbackLabel;
+    options.confirmLabel = this.confirmLabel;
+    options.captureLabel = this.captureLabel;
+    options.retakeLabel = this.retakeLabel;
+    options.retryLabel = this.retryLabel;
     const capabilities = await resolveCaptureCapabilities({
       capturePreference: options.capturePreference,
     });
@@ -638,7 +654,7 @@ export class SimFaceCapture extends LitElement {
     this.clearPreviewUrl();
     this.captureState = 'idle';
     this.errorMessage = '';
-    this.feedbackMessage = 'Start a capture to see camera guidance here.';
+    this.feedbackMessage = this.idleFeedbackLabel;
     this.feedbackTone = 'neutral';
     this.syncProgress(0);
     this.qualityResult = null;

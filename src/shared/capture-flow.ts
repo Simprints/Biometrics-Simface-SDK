@@ -1,19 +1,22 @@
 import { getVideoDetector } from '../services/face-detection.js';
 import type {
   CapturePreference,
-  CapturePresentation,
-  SimFaceCaptureOptions,
+  SimFaceCaptureElement,
+  SimFaceWorkflowOptions,
 } from '../types/index.js';
 
 export type CapturePlanStep = 'auto-camera' | 'manual-camera' | 'media-picker';
 
 export interface NormalizedCaptureOptions {
-  presentation: CapturePresentation;
   capturePreference: CapturePreference;
   allowMediaPickerFallback: boolean;
-  container?: HTMLElement | string;
+  component?: SimFaceCaptureElement;
   label: string;
+  idleFeedbackLabel: string;
   confirmLabel: string;
+  captureLabel: string;
+  retakeLabel: string;
+  retryLabel: string;
 }
 
 export interface CaptureCapabilities {
@@ -23,24 +26,31 @@ export interface CaptureCapabilities {
 }
 
 export interface CapturePlan {
-  presentation: CapturePresentation;
   steps: CapturePlanStep[];
   capabilities: CaptureCapabilities;
 }
 
 export const DEFAULT_LABEL = 'Capturing Face';
 export const DEFAULT_CONFIRM_LABEL = 'Accept';
+export const DEFAULT_CAPTURE_LABEL = 'Take photo';
+export const DEFAULT_RETAKE_LABEL = 'Retake';
+export const DEFAULT_RETRY_LABEL = 'Try again';
+export const DEFAULT_IDLE_FEEDBACK_LABEL = 'Start a capture to see camera guidance here.';
 
 export function normalizeCaptureOptions(
-  options: SimFaceCaptureOptions | undefined,
+  workflowOptions: SimFaceWorkflowOptions | undefined,
+  component?: SimFaceCaptureElement,
 ): NormalizedCaptureOptions {
   return {
-    presentation: options?.presentation ?? 'popup',
-    capturePreference: options?.capturePreference ?? 'auto-preferred',
-    allowMediaPickerFallback: options?.allowMediaPickerFallback ?? true,
-    container: options?.container,
-    label: options?.label ?? DEFAULT_LABEL,
-    confirmLabel: options?.confirmLabel ?? DEFAULT_CONFIRM_LABEL,
+    capturePreference: workflowOptions?.capturePreference ?? 'auto-preferred',
+    allowMediaPickerFallback: workflowOptions?.allowMediaPickerFallback ?? true,
+    component,
+    label: DEFAULT_LABEL,
+    idleFeedbackLabel: DEFAULT_IDLE_FEEDBACK_LABEL,
+    confirmLabel: DEFAULT_CONFIRM_LABEL,
+    captureLabel: DEFAULT_CAPTURE_LABEL,
+    retakeLabel: DEFAULT_RETAKE_LABEL,
+    retryLabel: DEFAULT_RETRY_LABEL,
   };
 }
 
@@ -87,7 +97,6 @@ export function buildCapturePlan(
   }
 
   return {
-    presentation: options.presentation,
     steps,
     capabilities,
   };

@@ -61,6 +61,71 @@ describe('camera service', () => {
   });
 
   describe('captureFromCamera', () => {
+    it('uses the provided simface-capture component for embedded capture', async () => {
+      const stop = vi.fn();
+      setMediaDevices({
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop }],
+        } as unknown as MediaStream),
+      } as MediaDevices);
+      faceDetectionMocks.getVideoDetector.mockRejectedValue(new Error('unsupported'));
+      faceDetectionMocks.assessFaceQuality.mockResolvedValue(createQualityResult());
+
+      const component = document.createElement('simface-capture') as SimFaceCaptureElement & {
+        embedded: boolean;
+        captureLabel: string;
+        retakeLabel: string;
+        confirmLabel: string;
+      };
+      document.body.appendChild(component);
+      component.label = 'Position your face';
+      component.captureLabel = 'Snap photo';
+      component.retakeLabel = 'Try another';
+      component.confirmLabel = 'Use image';
+
+      const capturePromise = captureFromCamera(
+        { capturePreference: 'manual-only' },
+        component,
+      );
+      // Dynamic import() resolves via macrotask, not microtask
+      await new Promise((r) => setTimeout(r, 0));
+      await flushMicrotasks(10);
+      await component.updateComplete;
+
+      expect(document.querySelectorAll('simface-capture')).toHaveLength(1);
+      expect(component.embedded).toBe(true);
+      expect(component.captureLabel).toBe('Snap photo');
+      expect(component.retakeLabel).toBe('Try another');
+      expect(component.confirmLabel).toBe('Use image');
+
+      const video = queryShadow<HTMLVideoElement>(component, 'video');
+      expect(video).not.toBeNull();
+      if (!video) {
+        throw new Error('Video element was not rendered.');
+      }
+
+      Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+      Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      await flushMicrotasks(10);
+      await component.updateComplete;
+
+      const captureButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="capture"]');
+      expect(captureButton?.textContent).toBe('Snap photo');
+      captureButton?.click();
+      await flushMicrotasks(10);
+      await component.updateComplete;
+
+      const retakeButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="retake"]');
+      const confirmButton = queryShadow<HTMLButtonElement>(component, '[data-simface-action="confirm"]');
+      expect(retakeButton?.textContent).toBe('Try another');
+      expect(confirmButton?.textContent).toBe('Use image');
+      confirmButton?.click();
+
+      await expect(capturePromise).resolves.toBeInstanceOf(Blob);
+      expect(stop).toHaveBeenCalled();
+    });
+
     it('counts down from the first good frame and confirms the best auto-captured popup frame', async () => {
       setUserAgent('Mozilla/5.0 Chrome/122.0 Safari/537.36');
 
