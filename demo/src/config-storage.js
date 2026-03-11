@@ -1,5 +1,5 @@
 export const STORAGE_KEY = 'simface-demo-config';
-export const DEFAULT_API_URL = 'http://localhost:8080';
+export const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
 
 export function normalizeApiUrl(value) {
   if (typeof value !== 'string') {

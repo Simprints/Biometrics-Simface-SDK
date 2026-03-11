@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_API_URL, readStoredConfig, toStoredConfig, writeStoredConfig } from './config-storage.js';
 
 describe('demo config storage', () => {
+  it('defaults to the hosted demo backend when nothing is stored', () => {
+    const storage = {
+      getItem: () => null,
+    };
+
+    expect(readStoredConfig(storage)).toEqual({
+      apiUrl: DEFAULT_API_URL,
+      clientId: '',
+      presentationMode: 'embedded',
+    });
+  });
+
   it('only persists non-sensitive fields', () => {
     expect(toStoredConfig({
       apiUrl: ' https://demo.example.com ',

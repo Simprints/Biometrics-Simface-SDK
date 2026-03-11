@@ -388,4 +388,4 @@ npm run dev
 
 The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
 
-The demo defaults its backend URL to `http://localhost:8080` so public clones do not automatically target a hosted SimFace service.
+The published demo starts with the hosted demo backend URL by default so GitHub Pages users can try the flow immediately. Override the API URL if you want to point it at a local or alternate backend.
