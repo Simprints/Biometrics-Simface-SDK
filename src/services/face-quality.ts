@@ -32,10 +32,15 @@ const MAX_FACE_AREA_RATIO = 0.42;
 const IDEAL_FACE_AREA_RATIO = 0.24;
 const CENTER_TOLERANCE_X = 0.14;
 const CENTER_TOLERANCE_Y = 0.18;
-const MAX_NOSE_OFFSET_RATIO = 0.08;
-const MAX_EYE_TILT_RATIO = 0.15;
-const MAX_PITCH_RATIO = 0.72;
-const MIN_PITCH_RATIO = 0.35;
+
+/** Yaw: max horizontal nose offset / interocular distance. */
+const MAX_NOSE_OFFSET_RATIO = 0.12;
+/** Roll: max eye vertical difference / interocular distance. */
+const MAX_EYE_TILT_RATIO = 0.2;
+/** Pitch ceiling: live BlazeFace signal shows higher ratios when the chin is tucked / looking down. */
+const MAX_PITCH_RATIO = 0.95;
+/** Pitch floor: live BlazeFace signal shows lower ratios when the chin is raised / looking up. */
+const MIN_PITCH_RATIO = 0.2;
 
 const KEYPOINT_RIGHT_EYE = 0;
 const KEYPOINT_LEFT_EYE = 1;
@@ -201,14 +206,14 @@ function detectTurnFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedback
   const pitchRatio = (nose.y - eyeMidpointY) / eyeDistanceX;
   if (pitchRatio >= MAX_PITCH_RATIO) {
     return {
-      feedback: 'look-down',
-      message: 'Lower your chin slightly so your face points at the camera.',
+      feedback: 'look-up',
+      message: 'Raise your chin slightly so your face points at the camera.',
     };
   }
   if (pitchRatio <= MIN_PITCH_RATIO) {
     return {
-      feedback: 'look-up',
-      message: 'Raise your chin slightly so your face points at the camera.',
+      feedback: 'look-down',
+      message: 'Lower your chin slightly so your face points at the camera.',
     };
   }
 

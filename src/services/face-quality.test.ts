@@ -79,14 +79,14 @@ describe('evaluateFaceQuality', () => {
     expect(result.passesQualityChecks).toBe(false);
   });
 
-  it('flags when looking up (chin raised, high pitch ratio)', () => {
+  it('flags when looking down (chin tucked, high pitch ratio)', () => {
     const result = evaluateFaceQuality({
       detections: [
         createDetection({
           keypoints: [
             { x: 0.42, y: 0.42 },
             { x: 0.58, y: 0.42 },
-            { x: 0.5, y: 0.58 },  // nose far below eyes in 2D → looking up
+            { x: 0.5, y: 0.61 },  // nose far below eyes in 2D → looking down
           ],
         }),
       ],
@@ -94,19 +94,39 @@ describe('evaluateFaceQuality', () => {
       height: 1000,
     });
 
-    // pitchRatio = (0.58 - 0.42) / 0.16 = 1.0 → look-down (corrective)
+    // pitchRatio = (0.61 - 0.42) / 0.16 = 1.1875 → look-up (corrective)
+    expect(result.feedback).toBe('look-up');
+    expect(result.passesQualityChecks).toBe(false);
+  });
+
+  it('flags when looking up (chin raised, low pitch ratio)', () => {
+    const result = evaluateFaceQuality({
+      detections: [
+        createDetection({
+          keypoints: [
+            { x: 0.42, y: 0.42 },
+            { x: 0.58, y: 0.42 },
+            { x: 0.5, y: 0.44 },  // nose barely below eyes in 2D → looking up
+          ],
+        }),
+      ],
+      width: 1000,
+      height: 1000,
+    });
+
+    // pitchRatio = (0.44 - 0.42) / 0.16 = 0.125 → look-down (corrective)
     expect(result.feedback).toBe('look-down');
     expect(result.passesQualityChecks).toBe(false);
   });
 
-  it('flags when looking down (chin tucked, low pitch ratio)', () => {
+  it('accepts a mild pose deviation window for auto-capture', () => {
     const result = evaluateFaceQuality({
       detections: [
         createDetection({
           keypoints: [
             { x: 0.42, y: 0.42 },
-            { x: 0.58, y: 0.42 },
-            { x: 0.5, y: 0.445 },  // nose barely below eyes in 2D → looking down
+            { x: 0.58, y: 0.44 },
+            { x: 0.514, y: 0.55 },
           ],
         }),
       ],
@@ -114,9 +134,9 @@ describe('evaluateFaceQuality', () => {
       height: 1000,
     });
 
-    // pitchRatio = (0.445 - 0.42) / 0.16 = 0.15625 → look-up (corrective)
-    expect(result.feedback).toBe('look-up');
-    expect(result.passesQualityChecks).toBe(false);
+    // yaw = 0.0875, roll = -0.125, pitch = 0.75
+    expect(result.feedback).toBe('good');
+    expect(result.passesQualityChecks).toBe(true);
   });
 
   it('passes when the face is centered, sized correctly, and facing forward', () => {
