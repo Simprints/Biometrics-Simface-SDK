@@ -1,10 +1,10 @@
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Mulish', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #0f172a;
-  background: #f8fafc;
+  color: #212529;
+  background: #F6F6F6;
 }
 
 * {
@@ -15,9 +15,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 25%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.12), transparent 20%),
-    #f8fafc;
+    radial-gradient(circle at top left, rgba(0, 179, 209, 0.08), transparent 25%),
+    radial-gradient(circle at top right, rgba(255, 124, 1, 0.06), transparent 20%),
+    #F6F6F6;
 }
 
 code {
@@ -37,7 +37,7 @@ code {
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #2563eb;
+  color: #FF7C01;
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -48,11 +48,12 @@ h1,
 h2,
 h3 {
   margin: 0;
-  color: #020617;
+  color: #2A2A2A;
 }
 
 .hero h1 {
   font-size: clamp(2rem, 4vw, 2.8rem);
+  font-weight: 800;
   margin-bottom: 12px;
 }
 
@@ -60,7 +61,7 @@ h3 {
 .section-copy {
   margin: 0;
   max-width: 72ch;
-  color: #334155;
+  color: #5D5E5E;
 }
 
 .layout {
@@ -74,10 +75,10 @@ h3 {
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  border: 1px solid #dbe4f0;
+  border: 1px solid #E0E0E0;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 16px 40px rgba(42, 42, 42, 0.06);
 }
 
 .card-log,
@@ -94,24 +95,24 @@ h3 {
   display: grid;
   gap: 6px;
   font-weight: 600;
-  color: #0f172a;
+  color: #2A2A2A;
 }
 
 .config-form input,
 .config-form select {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #E0E0E0;
   border-radius: 12px;
   background: white;
-  color: #020617;
+  color: #212529;
   font: inherit;
 }
 
 .config-form input:focus,
 .config-form select:focus {
-  outline: 2px solid rgba(37, 99, 235, 0.25);
-  border-color: #2563eb;
+  outline: 2px solid rgba(0, 179, 209, 0.25);
+  border-color: #00B3D1;
 }
 
 .actions {
@@ -126,6 +127,8 @@ h3 {
   padding: 11px 18px;
   font: inherit;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: transform 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
 }
@@ -141,17 +144,29 @@ h3 {
 
 .button-primary {
   color: white;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: #00B3D1;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: #009DB8;
 }
 
 .button-secondary {
-  color: #0f172a;
-  background: #dbeafe;
+  color: white;
+  background: #FF7C01;
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: #E06D00;
 }
 
 .button-ghost {
-  color: #0f172a;
-  background: #e2e8f0;
+  color: #2A2A2A;
+  background: #E0E0E0;
+}
+
+.button-ghost:hover:not(:disabled) {
+  background: #D0D0D0;
 }
 
 .status-row {
@@ -171,13 +186,13 @@ h3 {
 }
 
 .status-idle {
-  color: #0f172a;
-  background: #e2e8f0;
+  color: #2A2A2A;
+  background: #E0E0E0;
 }
 
 .status-running {
-  color: #854d0e;
-  background: #fef3c7;
+  color: #E06D00;
+  background: #FFF3E6;
 }
 
 .status-success {
@@ -196,8 +211,8 @@ h3 {
   padding: 16px;
   overflow: auto;
   border-radius: 14px;
-  background: #020617;
-  color: #e2e8f0;
+  background: #363636;
+  color: #E0E0E0;
   font-size: 0.92rem;
 }
 
@@ -212,9 +227,9 @@ h3 {
 
 .event-log-empty {
   padding: 12px 14px;
-  border: 1px dashed #cbd5e1;
+  border: 1px dashed #E0E0E0;
   border-radius: 12px;
-  color: #64748b;
+  color: #5D5E5E;
 }
 
 .event-item {
@@ -222,14 +237,14 @@ h3 {
   padding: 12px 14px;
   border-left: 4px solid transparent;
   border-radius: 12px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: #F6F6F6;
+  color: #212529;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .event-item-info {
-  border-left-color: #2563eb;
+  border-left-color: #00B3D1;
 }
 
 .event-item-success {
