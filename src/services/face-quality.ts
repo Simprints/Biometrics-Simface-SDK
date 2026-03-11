@@ -1,4 +1,5 @@
 import type { FaceFeedbackCode, FaceQualityResult } from '../types/index.js';
+import { MIN_SHARPNESS_SCORE } from './sharpness.js';
 
 export interface FaceBoundingBox {
   originX: number;
@@ -22,6 +23,8 @@ interface FaceQualityInput {
   width: number;
   height: number;
   detections: FaceDetectionSnapshot[];
+  /** Normalised sharpness score (0–1) for the face region. Omit when unavailable (e.g. image mode). */
+  sharpnessScore?: number;
 }
 
 const MIN_FACE_AREA_RATIO = 0.1;
@@ -29,14 +32,17 @@ const MAX_FACE_AREA_RATIO = 0.42;
 const IDEAL_FACE_AREA_RATIO = 0.24;
 const CENTER_TOLERANCE_X = 0.14;
 const CENTER_TOLERANCE_Y = 0.18;
-const MAX_NOSE_OFFSET_RATIO = 0.12;
+const MAX_NOSE_OFFSET_RATIO = 0.08;
+const MAX_EYE_TILT_RATIO = 0.15;
+const MAX_PITCH_RATIO = 0.72;
+const MIN_PITCH_RATIO = 0.35;
 
 const KEYPOINT_RIGHT_EYE = 0;
 const KEYPOINT_LEFT_EYE = 1;
 const KEYPOINT_NOSE = 2;
 
 export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult {
-  const { detections, width, height } = input;
+  const { detections, width, height, sharpnessScore } = input;
 
   if (detections.length === 0) {
     return createQualityResult({
@@ -44,6 +50,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       faceCount: 0,
       confidence: 0,
       captureScore: 0,
+      sharpnessScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'no-face',
@@ -57,6 +64,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       faceCount: detections.length,
       confidence: detections[0]?.confidence ?? 0,
       captureScore: 0,
+      sharpnessScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'multiple-faces',
@@ -73,6 +81,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
       faceCount: 1,
       confidence: detection.confidence,
       captureScore: 0,
+      sharpnessScore: 0,
       isCentered: false,
       passesQualityChecks: false,
       feedback: 'face-unclear',
@@ -113,11 +122,28 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
     return createFrameAdjustmentResult(detection.confidence, turnFeedback.feedback, turnFeedback.message);
   }
 
+  const resolvedSharpness = sharpnessScore ?? 1;
+
+  if (resolvedSharpness < MIN_SHARPNESS_SCORE) {
+    return createQualityResult({
+      hasFace: true,
+      faceCount: 1,
+      confidence: detection.confidence,
+      captureScore: calculateCaptureScore(detection.confidence, faceCenterX, faceCenterY, faceAreaRatio, resolvedSharpness),
+      sharpnessScore: resolvedSharpness,
+      isCentered: true,
+      passesQualityChecks: false,
+      feedback: 'too-blurry',
+      message: 'Hold still so the image is not blurry.',
+    });
+  }
+
   return createQualityResult({
     hasFace: true,
     faceCount: 1,
     confidence: detection.confidence,
-    captureScore: calculateCaptureScore(detection.confidence, faceCenterX, faceCenterY, faceAreaRatio),
+    captureScore: calculateCaptureScore(detection.confidence, faceCenterX, faceCenterY, faceAreaRatio, resolvedSharpness),
+    sharpnessScore: resolvedSharpness,
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',
@@ -134,24 +160,55 @@ function detectTurnFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedback
     return null;
   }
 
-  const eyeMidpointX = (rightEye.x + leftEye.x) / 2;
-  const eyeDistance = Math.abs(leftEye.x - rightEye.x);
-  if (eyeDistance === 0) {
+  const eyeDistanceX = Math.abs(leftEye.x - rightEye.x);
+  if (eyeDistanceX === 0) {
     return null;
   }
 
-  const noseOffsetRatio = (nose.x - eyeMidpointX) / eyeDistance;
+  // Yaw: horizontal nose offset relative to eye midpoint
+  const eyeMidpointX = (rightEye.x + leftEye.x) / 2;
+  const noseOffsetRatio = (nose.x - eyeMidpointX) / eyeDistanceX;
   if (noseOffsetRatio <= -MAX_NOSE_OFFSET_RATIO) {
     return {
       feedback: 'turn-left',
       message: 'Turn slightly left so your face points at the camera.',
     };
   }
-
   if (noseOffsetRatio >= MAX_NOSE_OFFSET_RATIO) {
     return {
       feedback: 'turn-right',
       message: 'Turn slightly right so your face points at the camera.',
+    };
+  }
+
+  // Roll: head tilt detected via eye vertical difference
+  const eyeTiltRatio = (rightEye.y - leftEye.y) / eyeDistanceX;
+  if (eyeTiltRatio >= MAX_EYE_TILT_RATIO) {
+    return {
+      feedback: 'tilt-left',
+      message: 'Straighten your head — it is tilting to the right.',
+    };
+  }
+  if (eyeTiltRatio <= -MAX_EYE_TILT_RATIO) {
+    return {
+      feedback: 'tilt-right',
+      message: 'Straighten your head — it is tilting to the left.',
+    };
+  }
+
+  // Pitch: nose vertical offset relative to eye midpoint
+  const eyeMidpointY = (rightEye.y + leftEye.y) / 2;
+  const pitchRatio = (nose.y - eyeMidpointY) / eyeDistanceX;
+  if (pitchRatio >= MAX_PITCH_RATIO) {
+    return {
+      feedback: 'look-down',
+      message: 'Lower your chin slightly so your face points at the camera.',
+    };
+  }
+  if (pitchRatio <= MIN_PITCH_RATIO) {
+    return {
+      feedback: 'look-up',
+      message: 'Raise your chin slightly so your face points at the camera.',
     };
   }
 
@@ -168,6 +225,7 @@ function createFrameAdjustmentResult(
     faceCount: 1,
     confidence,
     captureScore: 0,
+    sharpnessScore: 0,
     isCentered: false,
     passesQualityChecks: false,
     feedback,
@@ -184,6 +242,7 @@ function calculateCaptureScore(
   faceCenterX: number,
   faceCenterY: number,
   faceAreaRatio: number,
+  sharpnessScore: number,
 ) {
   const xPenalty = Math.abs(faceCenterX - 0.5) / CENTER_TOLERANCE_X;
   const yPenalty = Math.abs(faceCenterY - 0.5) / CENTER_TOLERANCE_Y;
@@ -195,5 +254,7 @@ function calculateCaptureScore(
   );
   const sizeScore = 1 - Math.min(Math.abs(faceAreaRatio - IDEAL_FACE_AREA_RATIO) / maxAreaDistance, 1);
 
-  return Number((confidence * 0.55 + centerScore * 0.3 + sizeScore * 0.15).toFixed(4));
+  return Number(
+    (confidence * 0.40 + centerScore * 0.25 + sizeScore * 0.10 + sharpnessScore * 0.25).toFixed(4),
+  );
 }

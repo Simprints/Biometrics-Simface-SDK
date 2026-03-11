@@ -22,6 +22,7 @@ function makeQualityResult(overrides: Partial<FaceQualityResult> = {}): FaceQual
     faceCount: 1,
     confidence: 0.9,
     captureScore: 0.85,
+    sharpnessScore: 0.8,
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',
@@ -33,6 +34,8 @@ function makeQualityResult(overrides: Partial<FaceQualityResult> = {}): FaceQual
 function makeFrameCaptureMock() {
   return {
     captureBlob: vi.fn().mockResolvedValue(new Blob(['img'], { type: 'image/jpeg' })),
+    captureWorkingFrame: vi.fn(),
+    promoteWorkingToBest: vi.fn(),
     storeBestFrame: vi.fn(),
     hasStoredBestFrame: vi.fn().mockReturnValue(false),
     storedBestFrameToBlob: vi.fn().mockResolvedValue(new Blob(['best'], { type: 'image/jpeg' })),
@@ -427,5 +430,27 @@ describe('CameraCaptureSessionController canTakePhoto', () => {
     const liveState = onStateChange.mock.calls.map(([s]) => s).find((s) => s.phase === 'live');
     // After retake in manual mode (takePhotoNow switches to manual), canTakePhoto is true.
     expect(liveState?.canTakePhoto).toBe(true);
+  });
+
+  it('snapshots the frame before assessment so the best frame matches the evaluated frame', async () => {
+    const assessLiveQuality = vi.fn().mockResolvedValue(
+      makeQualityResult({ passesQualityChecks: true, captureScore: 0.9 }),
+    );
+
+    const { controller, frameCaptureMock } = makeController({
+      initialMode: 'auto',
+      assessLiveQuality,
+    });
+    await controller.start();
+
+    // Run one analysis cycle.
+    vi.runAllTimers();
+    await vi.runAllTicks();
+
+    // captureWorkingFrame must be called before assessLiveQuality returns,
+    // and promoteWorkingToBest is called instead of storeBestFrame.
+    expect(frameCaptureMock.captureWorkingFrame).toHaveBeenCalledTimes(1);
+    expect(frameCaptureMock.promoteWorkingToBest).toHaveBeenCalledTimes(1);
+    expect(frameCaptureMock.storeBestFrame).not.toHaveBeenCalled();
   });
 });

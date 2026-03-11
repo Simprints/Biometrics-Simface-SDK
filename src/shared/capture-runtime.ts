@@ -14,6 +14,10 @@ export class CameraAccessError extends Error {
 
 export interface ReusableFrameCapture {
   captureBlob: (video: HTMLVideoElement) => Promise<Blob>;
+  /** Snapshot the current video frame to an internal working canvas. */
+  captureWorkingFrame: (video: HTMLVideoElement) => void;
+  /** Copy the working canvas to the best-frame canvas, replacing any previous best. */
+  promoteWorkingToBest: () => void;
   storeBestFrame: (video: HTMLVideoElement) => void;
   hasStoredBestFrame: () => boolean;
   storedBestFrameToBlob: () => Promise<Blob>;
@@ -103,6 +107,18 @@ export function createReusableFrameCapture(): ReusableFrameCapture {
     async captureBlob(video) {
       drawFrame(video, workingCanvas);
       return canvasToBlob(workingCanvas);
+    },
+    captureWorkingFrame(video) {
+      drawFrame(video, workingCanvas);
+    },
+    promoteWorkingToBest() {
+      if (!workingCanvas.width || !workingCanvas.height) {
+        throw new Error('No working frame to promote.');
+      }
+      bestFrameCanvas.width = workingCanvas.width;
+      bestFrameCanvas.height = workingCanvas.height;
+      getContext(bestFrameCanvas).drawImage(workingCanvas, 0, 0);
+      hasStoredBestFrame = true;
     },
     storeBestFrame(video) {
       drawFrame(video, bestFrameCanvas);

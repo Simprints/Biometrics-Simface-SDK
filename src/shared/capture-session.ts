@@ -317,6 +317,10 @@ export class CameraCaptureSessionController {
     this.lastAnalysisTimestamp = timestamp;
 
     try {
+      // Snapshot the current frame BEFORE the async assessment so that
+      // the stored image matches the frame that was actually evaluated.
+      this.frameCapture.captureWorkingFrame(this.videoElement);
+
       const qualityResult = await this.assessLiveQuality(this.videoElement, timestamp);
       if (this.stopped) return;
       if (this.mode !== 'auto' || this.state.phase !== 'live') return;
@@ -327,7 +331,7 @@ export class CameraCaptureSessionController {
         }
 
         if (qualityResult.captureScore > this.bestCaptureScore) {
-          this.frameCapture.storeBestFrame(this.videoElement);
+          this.frameCapture.promoteWorkingToBest();
           this.bestCaptureScore = qualityResult.captureScore;
           this.bestQualityResult = qualityResult;
         }
