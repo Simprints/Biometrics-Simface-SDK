@@ -28,6 +28,8 @@ vi.mock('./sharpness.js', () => sharpnessMocks);
 
 import { assessFaceQualityForVideo } from './face-detection.js';
 
+const MOCK_SHARPNESS_SCORE = 0.73;
+
 describe('assessFaceQualityForVideo', () => {
   const detectForVideo = vi.fn();
 
@@ -35,24 +37,37 @@ describe('assessFaceQualityForVideo', () => {
     vi.clearAllMocks();
     mediaPipeMocks.forVisionTasks.mockResolvedValue({});
     mediaPipeMocks.createFromOptions.mockResolvedValue({ detectForVideo });
-    sharpnessMocks.computeSharpnessScore.mockReturnValue(0.73);
+    sharpnessMocks.computeSharpnessScore.mockReturnValue(MOCK_SHARPNESS_SCORE);
   });
 
   it('defers sharpness computation until evaluateFaceQuality requests it', async () => {
     detectForVideo.mockReturnValue({
       detections: [createMediaPipeDetection()],
     });
+    const videoElement = createVideoElement();
     faceQualityMocks.evaluateFaceQuality.mockImplementation(({ resolveSharpnessScore }) => {
       expect(resolveSharpnessScore).toBeTypeOf('function');
       expect(sharpnessMocks.computeSharpnessScore).not.toHaveBeenCalled();
-      expect(resolveSharpnessScore()).toBe(0.73);
+      const resolvedSharpness = resolveSharpnessScore();
+      expect(resolvedSharpness).toBe(MOCK_SHARPNESS_SCORE);
       expect(sharpnessMocks.computeSharpnessScore).toHaveBeenCalledTimes(1);
-      return createQualityResult();
+      expect(sharpnessMocks.computeSharpnessScore).toHaveBeenCalledWith(
+        videoElement,
+        {
+          x: 120,
+          y: 80,
+          width: 320,
+          height: 420,
+        },
+        expect.any(HTMLCanvasElement),
+      );
+      return createQualityResult({ sharpnessScore: resolvedSharpness });
     });
 
-    const result = await assessFaceQualityForVideo(createVideoElement(), 123);
+    const result = await assessFaceQualityForVideo(videoElement, 123);
 
     expect(result.feedback).toBe('good');
+    expect(result.sharpnessScore).toBe(MOCK_SHARPNESS_SCORE);
   });
 
   it('skips sharpness computation when evaluateFaceQuality returns before using it', async () => {

@@ -43,6 +43,8 @@ const MAX_EYE_TILT_RATIO = 0.2;
 const MAX_PITCH_RATIO = 0.95;
 /** Pitch floor: live BlazeFace signal shows lower ratios when the chin is raised / looking up. */
 const MIN_PITCH_RATIO = 0.2;
+/** Image-mode sharpness is unavailable, so do not penalise captures for a missing live-video metric. */
+const DEFAULT_SHARPNESS_SCORE = 1;
 
 const KEYPOINT_RIGHT_EYE = 0;
 const KEYPOINT_LEFT_EYE = 1;
@@ -129,7 +131,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
     return createFrameAdjustmentResult(detection.confidence, poseFeedback.feedback, poseFeedback.message);
   }
 
-  const resolvedSharpness = sharpnessScore ?? resolveSharpnessScore?.() ?? 1;
+  const resolvedSharpness = sharpnessScore ?? resolveSharpnessScore?.() ?? DEFAULT_SHARPNESS_SCORE;
 
   if (resolvedSharpness < MIN_SHARPNESS_SCORE) {
     return createQualityResult({
