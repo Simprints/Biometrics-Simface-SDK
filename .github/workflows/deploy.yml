@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
@@ -54,3 +54,43 @@ jobs:
         run: npm publish --access public
         env:
           NPM_CONFIG_PROVENANCE: false
+
+  deploy-demo:
+    name: Deploy Demo to GitHub Pages
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build SDK
+        run: |
+          npm install
+          npm run build
+
+      - name: Build demo
+        run: |
+          cd demo
+          npm install
+          npm run build
+        env:
+          VITE_BASE_PATH: /LegoDay-Simprints-IDV-Frontend/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
