@@ -8,6 +8,15 @@ SimFace SDK — a web-based facial recognition SDK for KYC workflows. It capture
 - Vite (build tooling)
 - Vitest (testing)
 
+## Demo Hosting
+The `demo/` app is automatically deployed to **GitHub Pages** on every push to `main`.
+
+Live URL: `https://simprints.github.io/LegoDay-Simprints-IDV-Frontend/`
+
+> **One-time setup required:** In the GitHub repo go to **Settings → Pages → Build and deployment → Source** and set it to **"GitHub Actions"**. Without this, the `deploy-demo` workflow job will fail.
+
+The `VITE_BASE_PATH` environment variable is set to `/LegoDay-Simprints-IDV-Frontend/` in CI so Vite produces correct asset URLs for the subpath. Local dev leaves this unset (defaults to `/`).
+
 ## Rules & Conventions
 - **Language:** TypeScript
 - Never git commit code changes, I like to review the changes and then commit myself.
