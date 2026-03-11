@@ -42,6 +42,7 @@ export interface SimFaceCaptureElement extends HTMLElement {
   embedded: boolean;
   active: boolean;
   label: string;
+  idleFeedbackLabel: string;
   confirmLabel: string;
   captureLabel: string;
   retakeLabel: string;

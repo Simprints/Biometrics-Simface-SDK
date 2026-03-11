@@ -12,6 +12,7 @@ export interface NormalizedCaptureOptions {
   allowMediaPickerFallback: boolean;
   component?: SimFaceCaptureElement;
   label: string;
+  idleFeedbackLabel: string;
   confirmLabel: string;
   captureLabel: string;
   retakeLabel: string;
@@ -34,6 +35,7 @@ export const DEFAULT_CONFIRM_LABEL = 'Accept';
 export const DEFAULT_CAPTURE_LABEL = 'Take photo';
 export const DEFAULT_RETAKE_LABEL = 'Retake';
 export const DEFAULT_RETRY_LABEL = 'Try again';
+export const DEFAULT_IDLE_FEEDBACK_LABEL = 'Start a capture to see camera guidance here.';
 
 export function normalizeCaptureOptions(
   workflowOptions: SimFaceWorkflowOptions | undefined,
@@ -44,6 +46,7 @@ export function normalizeCaptureOptions(
     allowMediaPickerFallback: workflowOptions?.allowMediaPickerFallback ?? true,
     component,
     label: DEFAULT_LABEL,
+    idleFeedbackLabel: DEFAULT_IDLE_FEEDBACK_LABEL,
     confirmLabel: DEFAULT_CONFIRM_LABEL,
     captureLabel: DEFAULT_CAPTURE_LABEL,
     retakeLabel: DEFAULT_RETAKE_LABEL,

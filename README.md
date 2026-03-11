@@ -119,6 +119,7 @@ If you want capture inline in your page, create a `simface-capture` element and 
   embedded
   capture-preference="auto-preferred"
   label="Take a selfie for verification"
+  idle-feedback-label="Start verification to see camera guidance here."
   capture-label="Snap photo"
   retake-label="Take another"
   confirm-label="Use this photo"
@@ -214,6 +215,7 @@ Use the `simface-capture` Web Component directly when you want the host applicat
   embedded
   capture-preference="auto-preferred"
   label="Take a selfie for verification"
+  idle-feedback-label="Start verification to see camera guidance here."
   capture-label="Snap photo"
   retake-label="Take another"
   confirm-label="Use this photo"
@@ -262,6 +264,7 @@ This is more flexible, but it also means the host owns more of the workflow.
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `label` | String | `"Capturing Face"` | Primary instructional text shown by the component |
+| `idle-feedback-label` | String | `"Start a capture to see camera guidance here."` | Idle guidance text shown in the feedback area before capture begins |
 | `embedded` | Boolean | `false` | Runs the component inline instead of delegating to the popup capture service |
 | `capture-label` | String | `"Take photo"` | Manual capture button label |
 | `retake-label` | String | `"Retake"` | Preview retake button label |

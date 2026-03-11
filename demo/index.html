@@ -72,7 +72,12 @@
           <p class="section-copy">
             The demo passes this `simface-capture` element into the SDK helpers for embedded capture instead of opening a separate popup.
           </p>
-          <simface-capture id="inline-capture" embedded label="Choose Enroll or Verify to begin capture."></simface-capture>
+          <simface-capture
+            id="inline-capture"
+            embedded
+            label="Choose Enroll or Verify to begin capture."
+            idle-feedback-label="Start Enroll or Verify to see camera guidance here."
+          ></simface-capture>
         </section>
 
         <section class="card card-status">

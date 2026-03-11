@@ -160,6 +160,19 @@ describe('<simface-capture>', () => {
     expect(captureButton2?.textContent).toBe('Take photo');
   });
 
+  it('renders custom idle feedback before capture starts', async () => {
+    const element = document.createElement('simface-capture') as SimFaceCapture;
+    element.embedded = true;
+    element.label = 'Choose an action.';
+    element.idleFeedbackLabel = 'Start a flow to see guidance.';
+    document.body.appendChild(element);
+    await element.updateComplete;
+
+    const text = element.shadowRoot?.textContent ?? '';
+    expect(text).toContain('Choose an action.');
+    expect(text).toContain('Start a flow to see guidance.');
+  });
+
   it('renders custom action labels in manual, preview, and error states', async () => {
     const stop = vi.fn();
     setMediaDevices({

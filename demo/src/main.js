@@ -45,6 +45,8 @@ function initializeCaptureComponent() {
   captureElement.embedded = true;
   captureElement.active = false;
   captureElement.capturePreference = 'auto-preferred';
+  captureElement.label = 'Choose Enroll or Verify to begin capture.';
+  captureElement.idleFeedbackLabel = 'Start Enroll or Verify to see camera guidance here.';
   captureElement.confirmLabel = 'Accept';
 }
 
@@ -241,6 +243,7 @@ async function startPopupCapture(action, config) {
 function resetCaptureComponent() {
   captureElement.active = false;
   captureElement.label = 'Choose Enroll or Verify to begin capture.';
+  captureElement.idleFeedbackLabel = 'Start Enroll or Verify to see camera guidance here.';
   captureElement.confirmLabel = 'Accept';
 }
 

@@ -10,6 +10,7 @@ import {
   normalizeCaptureOptions,
   resolveCaptureCapabilities,
   DEFAULT_CAPTURE_LABEL,
+  DEFAULT_IDLE_FEEDBACK_LABEL,
   DEFAULT_LABEL,
   DEFAULT_CONFIRM_LABEL,
   DEFAULT_RETAKE_LABEL,
@@ -43,6 +44,7 @@ type FeedbackTone = 'neutral' | 'success' | 'error' | 'manual';
 @customElement('simface-capture')
 export class SimFaceCapture extends LitElement {
   @property({ type: String }) label = DEFAULT_LABEL;
+  @property({ type: String, attribute: 'idle-feedback-label' }) idleFeedbackLabel = DEFAULT_IDLE_FEEDBACK_LABEL;
   @property({ type: Boolean, reflect: true }) embedded = false;
   @property({ type: Boolean, reflect: true }) active = false;
   @property({ type: String, attribute: 'confirm-label' }) confirmLabel = DEFAULT_CONFIRM_LABEL;
@@ -56,7 +58,7 @@ export class SimFaceCapture extends LitElement {
 
   @state() private captureState: CaptureState = 'idle';
   @state() private errorMessage = '';
-  @state() private feedbackMessage = 'Start a capture to see camera guidance here.';
+  @state() private feedbackMessage = DEFAULT_IDLE_FEEDBACK_LABEL;
   @state() private feedbackTone: FeedbackTone = 'neutral';
   @state() private previewUrl = '';
   @state() private qualityResult: FaceQualityResult | null = null;
@@ -377,9 +379,8 @@ export class SimFaceCapture extends LitElement {
         : ''}
 
       <p class="capture-copy">${this.label}</p>
-
       ${this.captureState === 'idle'
-        ? html`<p class="capture-copy">Waiting for the host page to start capture.</p>`
+        ? ''
         : html`
             <div class="stage">
               <video
@@ -451,6 +452,7 @@ export class SimFaceCapture extends LitElement {
       allowMediaPickerFallback: this.allowMediaPickerFallback,
     }, this);
     options.label = this.label;
+    options.idleFeedbackLabel = this.idleFeedbackLabel;
     options.confirmLabel = this.confirmLabel;
     options.captureLabel = this.captureLabel;
     options.retakeLabel = this.retakeLabel;
@@ -646,7 +648,7 @@ export class SimFaceCapture extends LitElement {
     this.clearPreviewUrl();
     this.captureState = 'idle';
     this.errorMessage = '';
-    this.feedbackMessage = 'Start a capture to see camera guidance here.';
+    this.feedbackMessage = this.idleFeedbackLabel;
     this.feedbackTone = 'neutral';
     this.syncProgress(0);
     this.qualityResult = null;
