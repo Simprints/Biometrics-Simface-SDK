@@ -219,7 +219,7 @@ export class SimFaceCapture extends LitElement {
       font-size: 15px;
       font-weight: 700;
       letter-spacing: 0.04em;
-      text-transform: uppercase;
+      text-transform: var(--simface-button-text-transform, uppercase);
       cursor: pointer;
       transition: background-color 0.15s, box-shadow 0.15s;
     }
