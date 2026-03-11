@@ -1,6 +1,7 @@
 import type { Detection, FaceDetector as MediaPipeFaceDetector } from '@mediapipe/tasks-vision';
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 import { evaluateFaceQuality } from './face-quality.js';
+import { computeSharpnessScore } from './sharpness.js';
 import type { FaceQualityResult } from '../types/index.js';
 
 const WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm';
@@ -52,17 +53,37 @@ export async function assessFaceQuality(imageElement: HTMLImageElement): Promise
   });
 }
 
+// Reusable offscreen canvas for sharpness computation (avoids allocation per frame)
+let sharpnessCanvas: HTMLCanvasElement | null = null;
+
 export async function assessFaceQualityForVideo(
   videoElement: HTMLVideoElement,
   timestamp: number,
 ): Promise<FaceQualityResult> {
   const detector = await getVideoDetector();
   const result = detector.detectForVideo(videoElement, timestamp);
+  const detections = mapDetections(result.detections);
 
   return evaluateFaceQuality({
-    detections: mapDetections(result.detections),
+    detections,
     width: videoElement.videoWidth,
     height: videoElement.videoHeight,
+    resolveSharpnessScore: detections.length === 1 && detections[0].boundingBox
+      ? () => {
+          const bbox = detections[0].boundingBox!;
+          sharpnessCanvas ??= document.createElement('canvas');
+          return computeSharpnessScore(
+            videoElement,
+            {
+              x: bbox.originX,
+              y: bbox.originY,
+              width: bbox.width,
+              height: bbox.height,
+            },
+            sharpnessCanvas,
+          );
+        }
+      : undefined,
   });
 }
 

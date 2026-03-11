@@ -491,6 +491,7 @@ function createQualityResult(
     faceCount: 1,
     confidence: 0.95,
     captureScore: 0.92,
+    sharpnessScore: 0.8,
     isCentered: true,
     passesQualityChecks: true,
     feedback: 'good',

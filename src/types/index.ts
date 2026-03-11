@@ -71,7 +71,12 @@ export type FaceFeedbackCode =
   | 'move-down'
   | 'turn-left'
   | 'turn-right'
+  | 'tilt-left'
+  | 'tilt-right'
+  | 'look-up'
+  | 'look-down'
   | 'face-unclear'
+  | 'too-blurry'
   | 'good';
 
 export interface FaceQualityResult {
@@ -79,6 +84,7 @@ export interface FaceQualityResult {
   faceCount: number;
   confidence: number;
   captureScore: number;
+  sharpnessScore: number;
   isCentered: boolean;
   passesQualityChecks: boolean;
   feedback: FaceFeedbackCode;
