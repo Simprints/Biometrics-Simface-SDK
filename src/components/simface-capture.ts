@@ -327,6 +327,12 @@ export class SimFaceCapture extends LitElement {
     this.stopSession();
   }
 
+  protected willUpdate(changedProperties: Map<string, unknown>) {
+    if (changedProperties.has('idleFeedbackLabel') && this.captureState === 'idle') {
+      this.feedbackMessage = this.idleFeedbackLabel;
+    }
+  }
+
   updated(changedProperties: Map<string, unknown>) {
     if (!changedProperties.has('active') || this.pendingActiveSync) {
       return;

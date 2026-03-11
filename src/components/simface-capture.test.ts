@@ -21,6 +21,7 @@ const originalSetTimeout = window.setTimeout;
 const originalClearTimeout = window.clearTimeout;
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
+const originalImage = window.Image;
 
 describe('<simface-capture>', () => {
   beforeEach(() => {
@@ -37,6 +38,7 @@ describe('<simface-capture>', () => {
     window.clearTimeout = originalClearTimeout;
     URL.createObjectURL = vi.fn(() => 'blob:preview');
     URL.revokeObjectURL = vi.fn();
+    window.Image = createMockImageConstructor();
     faceDetectionMocks.assessFaceQuality.mockReset();
     faceDetectionMocks.assessFaceQualityForVideo.mockReset();
     faceDetectionMocks.getVideoDetector.mockReset();
@@ -51,6 +53,7 @@ describe('<simface-capture>', () => {
     window.cancelAnimationFrame = originalCancelAnimationFrame;
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
+    window.Image = originalImage;
     setMediaDevices(originalMediaDevices);
   });
 
@@ -219,12 +222,18 @@ describe('<simface-capture>', () => {
     expect(retakeButton?.textContent).toBe('Use camera again');
     expect(confirmButton?.textContent).toBe('Submit photo');
 
+    // Force error state by restarting capture with camera unavailable
+    element.active = false;
+    await element.updateComplete;
+    await flushMicrotasks(10);
+
     setMediaDevices({
       getUserMedia: vi.fn().mockRejectedValue(new Error('camera unavailable')),
     } as unknown as MediaDevices);
-    retakeButton?.click();
-    await flushMicrotasks(10);
+    element.allowMediaPickerFallback = false;
+    element.active = true;
     await element.updateComplete;
+    await flushMicrotasks(10);
 
     const retryButton = element.shadowRoot?.querySelector('[data-simface-action="retry"]') as HTMLButtonElement | null;
     expect(retryButton?.textContent).toBe('Restart capture');
@@ -404,4 +413,19 @@ async function flushMicrotasks(iterations = 5) {
   for (let index = 0; index < iterations; index += 1) {
     await Promise.resolve();
   }
+}
+
+function createMockImageConstructor(): typeof Image {
+  return class MockImage {
+    onload: ((this: GlobalEventHandlers, ev: Event) => unknown) | null = null;
+    onerror: ((this: GlobalEventHandlers, ev: Event | string) => unknown) | null = null;
+    naturalWidth = 640;
+    naturalHeight = 480;
+
+    set src(_value: string) {
+      queueMicrotask(() => {
+        this.onload?.call(this as unknown as GlobalEventHandlers, new Event('load'));
+      });
+    }
+  } as unknown as typeof Image;
 }

@@ -87,6 +87,8 @@ describe('camera service', () => {
         { capturePreference: 'manual-only' },
         component,
       );
+      // Dynamic import() resolves via macrotask, not microtask
+      await new Promise((r) => setTimeout(r, 0));
       await flushMicrotasks(10);
       await component.updateComplete;
 
