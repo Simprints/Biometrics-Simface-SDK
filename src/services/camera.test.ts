@@ -55,6 +55,9 @@ describe('camera service', () => {
 
   afterEach(() => {
     document.body.innerHTML = '';
+    HTMLMediaElement.prototype.play = originalPlay;
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
+    HTMLCanvasElement.prototype.toBlob = originalToBlob;
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
     window.Image = originalImage;

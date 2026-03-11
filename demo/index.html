@@ -14,8 +14,8 @@
         <p class="eyebrow">SDK demo</p>
         <h1>SimFace SDK Demo App</h1>
         <p class="hero-copy">
-          This page uses the built SDK artifact from <code>dist/</code> and targets the hosted SimFace backend by
-          default. Override the API URL below if you want to point the demo at a different backend.
+          This page uses the built SDK artifact from <code>dist/</code> and starts with a local backend URL by default.
+          Override the API URL below if you want to point the demo at a different backend.
         </p>
       </header>
 
@@ -23,9 +23,13 @@
         <section class="card">
           <h2>Demo configuration</h2>
           <p class="section-copy">
-            The demo defaults to
-            <code>https://simface-api-85584555549.europe-west1.run.app</code>. You can override the API URL at any
-            time. If you point the demo at a different backend, keep its CORS setting compatible with the demo origin.
+            The demo defaults to <code>http://localhost:8080</code> so public clones start against a local backend.
+            Override the API URL at any time. If you point the demo at a different backend, keep its CORS setting
+            compatible with the demo origin.
+          </p>
+          <p class="section-copy">
+            For safety, the demo only stores the API URL, presentation mode, and client ID in local storage. Project IDs
+            and API keys are kept in memory for the current page only, so prefer short-lived credentials during testing.
           </p>
 
           <form id="config-form" class="config-form">
@@ -35,7 +39,7 @@
                 id="api-url"
                 name="apiUrl"
                 type="url"
-                placeholder="https://simface-api-85584555549.europe-west1.run.app"
+                placeholder="http://localhost:8080"
               />
             </label>
 

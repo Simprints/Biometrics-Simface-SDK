@@ -1,5 +1,18 @@
 import type { SimFaceConfig, ValidateResult, EnrollResult, VerifyResult, APIError } from '../types/index.js';
 
+async function getAPIErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const err = await response.json() as Partial<APIError>;
+    if (typeof err.error === 'string' && err.error.trim()) {
+      return err.error;
+    }
+  } catch {
+    // Ignore malformed or empty error payloads and fall back to a stable message.
+  }
+
+  return `${fallback} (HTTP ${response.status})`;
+}
+
 export class SimFaceAPIClient {
   private readonly apiUrl: string;
   private readonly projectId: string;
@@ -22,8 +35,7 @@ export class SimFaceAPIClient {
     });
 
     if (!response.ok) {
-      const err: APIError = await response.json();
-      throw new Error(err.error || 'API key validation failed');
+      throw new Error(await getAPIErrorMessage(response, 'API key validation failed'));
     }
 
     return response.json();
@@ -46,8 +58,7 @@ export class SimFaceAPIClient {
     }
 
     if (!response.ok) {
-      const err: APIError = await response.json();
-      throw new Error(err.error || 'Enrollment failed');
+      throw new Error(await getAPIErrorMessage(response, 'Enrollment failed'));
     }
 
     return response.json();
@@ -70,8 +81,7 @@ export class SimFaceAPIClient {
     }
 
     if (!response.ok) {
-      const err: APIError = await response.json();
-      throw new Error(err.error || 'Verification failed');
+      throw new Error(await getAPIErrorMessage(response, 'Verification failed'));
     }
 
     return response.json();
