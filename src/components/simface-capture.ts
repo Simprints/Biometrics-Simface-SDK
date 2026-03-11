@@ -76,7 +76,8 @@ export class SimFaceCapture extends LitElement {
   static styles = css`
     :host {
       display: block;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #212529;
       max-width: 400px;
       margin: 0 auto;
       text-align: center;
@@ -91,9 +92,9 @@ export class SimFaceCapture extends LitElement {
     .container {
       position: relative;
       padding: 16px;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #E0E0E0;
       border-radius: 16px;
-      background: #fafafa;
+      background: #F6F6F6;
     }
 
     .close-btn {
@@ -110,7 +111,7 @@ export class SimFaceCapture extends LitElement {
       border: none;
       border-radius: 50%;
       background: rgba(0, 0, 0, 0.06);
-      color: #49454f;
+      color: #5D5E5E;
       cursor: pointer;
       transition: background-color 0.15s;
     }
@@ -133,7 +134,7 @@ export class SimFaceCapture extends LitElement {
 
     .capture-copy {
       margin: 0;
-      color: #334155;
+      color: #5D5E5E;
       text-align: center;
       width: 100%;
     }
@@ -145,8 +146,8 @@ export class SimFaceCapture extends LitElement {
       aspect-ratio: 3 / 4;
       border-radius: 22px;
       background:
-        radial-gradient(circle at top, rgba(56, 189, 248, 0.16), transparent 30%),
-        linear-gradient(180deg, #0f172a, #020617);
+        radial-gradient(circle at top, rgba(0, 179, 209, 0.16), transparent 30%),
+        linear-gradient(180deg, #1a1a1a, #0d0d0d);
       box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
     }
 
@@ -178,7 +179,7 @@ export class SimFaceCapture extends LitElement {
     }
 
     .guide-mask {
-      fill: rgba(51, 65, 85, 0.75);
+      fill: rgba(42, 42, 42, 0.75);
       fill-rule: evenodd;
     }
 
@@ -192,7 +193,7 @@ export class SimFaceCapture extends LitElement {
 
     .ring-progress {
       fill: none;
-      stroke: #22c55e;
+      stroke: #00B3D1;
       stroke-width: 2.8;
       stroke-linecap: round;
       stroke-linejoin: round;
@@ -216,24 +217,25 @@ export class SimFaceCapture extends LitElement {
       border: none;
       border-radius: 100px;
       font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
       cursor: pointer;
       transition: background-color 0.15s, box-shadow 0.15s;
     }
 
     .btn-primary {
-      background: #2563eb;
+      background: #00B3D1;
       color: white;
     }
 
     .btn-primary:hover {
-      background: #1d4ed8;
-      box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+      background: #009DB8;
+      box-shadow: 0 1px 3px rgba(0, 179, 209, 0.3);
     }
 
     .btn-primary:disabled {
-      background: #93c5fd;
+      background: #80D9E8;
       cursor: not-allowed;
       box-shadow: none;
     }
@@ -259,12 +261,12 @@ export class SimFaceCapture extends LitElement {
     }
 
     .btn-secondary {
-      background: #e5e7eb;
-      color: #374151;
+      background: #E0E0E0;
+      color: #212529;
     }
 
     .btn-secondary:hover {
-      background: #d1d5db;
+      background: #D0D0D0;
     }
 
     .quality-msg {
@@ -291,21 +293,21 @@ export class SimFaceCapture extends LitElement {
     }
 
     .quality-neutral {
-      background: #e2e8f0;
-      color: #0f172a;
+      background: #E0E0E0;
+      color: #212529;
     }
 
     .quality-manual {
-      background: #e0f2fe;
-      color: #0f172a;
+      background: #E0F7FB;
+      color: #212529;
     }
 
     .spinner {
       display: inline-block;
       width: 24px;
       height: 24px;
-      border: 3px solid #e5e7eb;
-      border-top: 3px solid #2563eb;
+      border: 3px solid #E0E0E0;
+      border-top: 3px solid #00B3D1;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
       margin: 12px auto;
