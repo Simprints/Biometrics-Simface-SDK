@@ -64,29 +64,26 @@ export async function assessFaceQualityForVideo(
   const result = detector.detectForVideo(videoElement, timestamp);
   const detections = mapDetections(result.detections);
 
-  let sharpnessScore: number | undefined;
-
-  // Compute sharpness only when there is exactly one face with a bounding box
-  if (detections.length === 1 && detections[0].boundingBox) {
-    const bbox = detections[0].boundingBox;
-    sharpnessCanvas ??= document.createElement('canvas');
-    sharpnessScore = computeSharpnessScore(
-      videoElement,
-      {
-        x: bbox.originX,
-        y: bbox.originY,
-        width: bbox.width,
-        height: bbox.height,
-      },
-      sharpnessCanvas,
-    );
-  }
-
   return evaluateFaceQuality({
     detections,
     width: videoElement.videoWidth,
     height: videoElement.videoHeight,
-    sharpnessScore,
+    resolveSharpnessScore: detections.length === 1 && detections[0].boundingBox
+      ? () => {
+          const bbox = detections[0].boundingBox!;
+          sharpnessCanvas ??= document.createElement('canvas');
+          return computeSharpnessScore(
+            videoElement,
+            {
+              x: bbox.originX,
+              y: bbox.originY,
+              width: bbox.width,
+              height: bbox.height,
+            },
+            sharpnessCanvas,
+          );
+        }
+      : undefined,
   });
 }
 

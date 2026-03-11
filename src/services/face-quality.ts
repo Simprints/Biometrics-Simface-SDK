@@ -25,6 +25,8 @@ interface FaceQualityInput {
   detections: FaceDetectionSnapshot[];
   /** Normalised sharpness score (0–1) for the face region. Omit when unavailable (e.g. image mode). */
   sharpnessScore?: number;
+  /** Lazily compute sharpness only after framing and pose checks pass. */
+  resolveSharpnessScore?: () => number;
 }
 
 const MIN_FACE_AREA_RATIO = 0.1;
@@ -41,13 +43,15 @@ const MAX_EYE_TILT_RATIO = 0.2;
 const MAX_PITCH_RATIO = 0.95;
 /** Pitch floor: live BlazeFace signal shows lower ratios when the chin is raised / looking up. */
 const MIN_PITCH_RATIO = 0.2;
+/** Image-mode sharpness is unavailable, so do not penalise captures for a missing live-video metric. */
+const DEFAULT_SHARPNESS_SCORE = 1;
 
 const KEYPOINT_RIGHT_EYE = 0;
 const KEYPOINT_LEFT_EYE = 1;
 const KEYPOINT_NOSE = 2;
 
 export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult {
-  const { detections, width, height, sharpnessScore } = input;
+  const { detections, width, height, sharpnessScore, resolveSharpnessScore } = input;
 
   if (detections.length === 0) {
     return createQualityResult({
@@ -122,12 +126,12 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
     return createFrameAdjustmentResult(detection.confidence, 'move-up', 'Move your face slightly up.');
   }
 
-  const turnFeedback = detectTurnFeedback(detection.keypoints);
-  if (turnFeedback) {
-    return createFrameAdjustmentResult(detection.confidence, turnFeedback.feedback, turnFeedback.message);
+  const poseFeedback = detectPoseFeedback(detection.keypoints);
+  if (poseFeedback) {
+    return createFrameAdjustmentResult(detection.confidence, poseFeedback.feedback, poseFeedback.message);
   }
 
-  const resolvedSharpness = sharpnessScore ?? 1;
+  const resolvedSharpness = sharpnessScore ?? resolveSharpnessScore?.() ?? DEFAULT_SHARPNESS_SCORE;
 
   if (resolvedSharpness < MIN_SHARPNESS_SCORE) {
     return createQualityResult({
@@ -156,7 +160,7 @@ export function evaluateFaceQuality(input: FaceQualityInput): FaceQualityResult 
   });
 }
 
-function detectTurnFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedbackCode; message: string } | null {
+function detectPoseFeedback(keypoints: FaceKeypoint[]): { feedback: FaceFeedbackCode; message: string } | null {
   const rightEye = keypoints[KEYPOINT_RIGHT_EYE];
   const leftEye = keypoints[KEYPOINT_LEFT_EYE];
   const nose = keypoints[KEYPOINT_NOSE];

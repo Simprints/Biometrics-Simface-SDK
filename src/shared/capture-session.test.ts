@@ -452,5 +452,9 @@ describe('CameraCaptureSessionController canTakePhoto', () => {
     expect(frameCaptureMock.captureWorkingFrame).toHaveBeenCalledTimes(1);
     expect(frameCaptureMock.promoteWorkingToBest).toHaveBeenCalledTimes(1);
     expect(frameCaptureMock.storeBestFrame).not.toHaveBeenCalled();
+
+    const captureOrder = frameCaptureMock.captureWorkingFrame.mock.invocationCallOrder[0];
+    const assessOrder = assessLiveQuality.mock.invocationCallOrder[0];
+    expect(captureOrder).toBeLessThan(assessOrder);
   });
 });

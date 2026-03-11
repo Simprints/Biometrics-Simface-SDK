@@ -20,9 +20,12 @@ export interface SharpnessRegion {
  * significantly different resolutions.
  */
 const REFERENCE_VARIANCE = 800;
+const GRAY_BUFFER_GROWTH_FACTOR = 1.5;
 
 /** Minimum sharpness score (0–1) below which a frame is considered too blurry. */
 export const MIN_SHARPNESS_SCORE = 0.15;
+
+const grayBuffersByCanvas = new WeakMap<HTMLCanvasElement, Float32Array>();
 
 /**
  * Compute a normalised sharpness score (0–1) for the given video frame.
@@ -53,27 +56,32 @@ export function computeSharpnessScore(
   );
 
   const imageData = ctx.getImageData(0, 0, region.width, region.height);
-  const variance = laplacianVariance(imageData);
-  return Math.min(variance / REFERENCE_VARIANCE, 1);
+  const grayBuffer = canvas ? getReusableGrayBuffer(canvas, region.width * region.height) : undefined;
+  const variance = Math.max(laplacianVariance(imageData, grayBuffer), 0);
+  return Math.min(Math.max(variance / REFERENCE_VARIANCE, 0), 1);
 }
 
 /**
  * Compute the Laplacian variance of an ImageData buffer.
  *
- * 1. Convert RGBA → luminance (fast integer approximation).
+ * 1. Convert RGBA → luminance using BT.601 luma weights.
  * 2. Convolve with the 3×3 Laplacian kernel: [[0,1,0],[1,-4,1],[0,1,0]]
  * 3. Return the variance of the filtered values.
  *
  * Exported for direct unit-testing with synthetic ImageData.
  */
-export function laplacianVariance(imageData: ImageData): number {
+export function laplacianVariance(imageData: ImageData, grayBuffer?: Float32Array): number {
   const { data, width, height } = imageData;
 
   // --- Step 1: grayscale luminance ---
-  const gray = new Float32Array(width * height);
-  for (let i = 0; i < gray.length; i++) {
+  const pixelCount = width * height;
+  const gray = grayBuffer && grayBuffer.length >= pixelCount
+    ? grayBuffer
+    : new Float32Array(pixelCount);
+
+  for (let i = 0; i < pixelCount; i++) {
     const offset = i * 4;
-    // ITU-R BT.601 luma weights (integer-shift approximation)
+    // ITU-R BT.601 luma weights
     gray[i] = data[offset] * 0.299 + data[offset + 1] * 0.587 + data[offset + 2] * 0.114;
   }
 
@@ -100,5 +108,19 @@ export function laplacianVariance(imageData: ImageData): number {
 
   // variance = E[X²] - E[X]²
   const mean = sum / innerPixels;
-  return sumSq / innerPixels - mean * mean;
+  return Math.max(sumSq / innerPixels - mean * mean, 0);
+}
+
+function getReusableGrayBuffer(canvas: HTMLCanvasElement, pixelCount: number): Float32Array {
+  const existing = grayBuffersByCanvas.get(canvas);
+  if (existing && existing.length >= pixelCount) {
+    return existing;
+  }
+
+  const nextSize = existing
+    ? Math.max(pixelCount, Math.ceil(existing.length * GRAY_BUFFER_GROWTH_FACTOR))
+    : pixelCount;
+  const next = new Float32Array(nextSize);
+  grayBuffersByCanvas.set(canvas, next);
+  return next;
 }
