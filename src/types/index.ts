@@ -4,7 +4,7 @@ export interface SimFaceConfig {
   apiUrl: string;
   /** Unique identifier for the project. */
   projectId: string;
-  /** API key for authentication. */
+  /** Short-lived API credential for authentication. Do not hardcode long-lived secrets into public client bundles. */
   apiKey: string;
 }
 

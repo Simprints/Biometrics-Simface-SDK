@@ -6,6 +6,8 @@ Works in: all modern browsers, WhatsApp in-app browser, and mobile WebViews.
 
 This repository is the public frontend SDK and demo repo for SimFace. For frontend architecture and contributor setup, see [docs/architecture.md](docs/architecture.md) and [docs/development.md](docs/development.md).
 
+For repository policies and contribution guidance, see [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and [LICENSE](LICENSE).
+
 The backend API, infrastructure, and TensorFlow Lite runtime live in the separate private backend repository.
 
 The capture flow is planned explicitly as: auto camera -> manual camera -> media picker. The primary API supports two UI modes:
@@ -55,6 +57,13 @@ const config = {
   apiKey: 'your-api-key',
 };
 ```
+
+### Security considerations
+
+- Treat `apiKey` as a browser-visible credential. Do not hardcode long-lived secrets into shipped frontend bundles.
+- Prefer issuing short-lived credentials or session-bound tokens from your own backend for each capture session.
+- Keep `apiUrl` on HTTPS in production and make sure the backend only accepts trusted origins and authorized project IDs.
+- The local demo does **not** persist project IDs or API keys to `localStorage`; it only remembers the API URL, presentation mode, and client ID between reloads.
 
 ### 3. Enroll a User
 
@@ -378,3 +387,5 @@ npm run dev
 ```
 
 The demo runs at `http://localhost:4173` and consumes the built SDK artifact from `dist/`. To enable HTTPS (required for camera access from other devices on the local network), set `DEMO_USE_HTTPS=true` before starting the demo.
+
+The published demo starts with the hosted demo backend URL by default so GitHub Pages users can try the flow immediately. Override the API URL if you want to point it at a local or alternate backend.

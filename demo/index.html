@@ -14,7 +14,7 @@
         <p class="eyebrow">SDK demo</p>
         <h1>SimFace SDK Demo App</h1>
         <p class="hero-copy">
-          This page uses the built SDK artifact from <code>dist/</code> and targets the hosted SimFace backend by
+          This page uses the built SDK artifact from <code>dist/</code> and starts with the hosted demo backend by
           default. Override the API URL below if you want to point the demo at a different backend.
         </p>
       </header>
@@ -24,8 +24,13 @@
           <h2>Demo configuration</h2>
           <p class="section-copy">
             The demo defaults to
-            <code>https://simface-api-85584555549.europe-west1.run.app</code>. You can override the API URL at any
-            time. If you point the demo at a different backend, keep its CORS setting compatible with the demo origin.
+            <code>https://simface-api-85584555549.europe-west1.run.app</code> so the GitHub Pages deployment works
+            without extra setup. Override the API URL at any time. If you point the demo at a different backend, keep
+            its CORS setting compatible with the demo origin.
+          </p>
+          <p class="section-copy">
+            For safety, the demo only stores the API URL, presentation mode, and client ID in local storage. Project IDs
+            and API keys are kept in memory for the current page only, so prefer short-lived credentials during testing.
           </p>
 
           <form id="config-form" class="config-form">
