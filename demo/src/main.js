@@ -1,9 +1,7 @@
 import './styles.css';
 import '@simprints/simface-sdk';
 import { SimFaceAPIClient, enroll as sdkEnroll, verify as sdkVerify } from '@simprints/simface-sdk';
-
-const STORAGE_KEY = 'simface-demo-config';
-const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
+import { DEFAULT_API_URL, readStoredConfig, writeStoredConfig } from './config-storage.js';
 
 const defaults = {
   apiUrl: DEFAULT_API_URL,
@@ -51,20 +49,12 @@ function initializeCaptureComponent() {
 }
 
 function loadConfig() {
-  const saved = readStoredConfig();
-  const config = { ...defaults, ...saved, apiUrl: normalizeApiUrl(saved.apiUrl) };
+  const saved = readStoredConfig(window.localStorage);
+  const config = { ...defaults, ...saved };
+  writeStoredConfig(window.localStorage, config);
 
   for (const [key, field] of Object.entries(fields)) {
     field.value = config[key] ?? '';
-  }
-}
-
-function readStoredConfig() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
   }
 }
 
@@ -85,8 +75,7 @@ function updateCaptureCardVisibility() {
 }
 
 function persistConfig() {
-  const config = getConfig();
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  writeStoredConfig(window.localStorage, getConfig());
 }
 
 function wireActions() {
@@ -313,15 +302,6 @@ function describeActionStart(action) {
   }
 
   return `${capitalize(action)} flow started. The SDK capture component will run inline in the page.`;
-}
-
-function normalizeApiUrl(value) {
-  if (typeof value !== 'string') {
-    return DEFAULT_API_URL;
-  }
-
-  const normalized = value.trim();
-  return normalized || DEFAULT_API_URL;
 }
 
 function summarizeActionResult(action, result) {

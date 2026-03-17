@@ -41,6 +41,17 @@ describe('SimFaceAPIClient', () => {
       const client = new SimFaceAPIClient(mockConfig);
       await expect(client.validateAPIKey()).rejects.toThrow('invalid credentials');
     });
+
+    it('falls back to a stable message when the error response is not JSON', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+      });
+
+      const client = new SimFaceAPIClient(mockConfig);
+      await expect(client.validateAPIKey()).rejects.toThrow('API key validation failed (HTTP 500)');
+    });
   });
 
   describe('enroll', () => {
@@ -115,6 +126,19 @@ describe('SimFaceAPIClient', () => {
 
       expect(result.notEnrolled).toBe(true);
       expect(result.match).toBe(false);
+    });
+
+    it('falls back when the backend error payload has no message', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: () => Promise.resolve({}),
+      });
+
+      const client = new SimFaceAPIClient(mockConfig);
+      const blob = new Blob(['fake'], { type: 'image/jpeg' });
+
+      await expect(client.verify('user-1', blob)).rejects.toThrow('Verification failed (HTTP 503)');
     });
   });
 

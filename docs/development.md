@@ -42,6 +42,12 @@ npm run test:watch
 npm run typecheck
 ```
 
+### Frontend linting
+
+```bash
+npm run lint
+```
+
 ## Building
 
 ### SDK
@@ -78,6 +84,10 @@ The demo runs at `http://localhost:4173` by default. To enable HTTPS (required f
 4. Open `http://localhost:4173` (or `https://localhost:4173` if `DEMO_USE_HTTPS=true`), fill in `projectId`, `apiKey`, and `clientId`, then use Validate, Enroll, and Verify.
 
 > Note: The demo expects a real backend, usually at `http://localhost:8080`.
+>
+> Note: The checked-in demo UI defaults to the hosted demo backend so the GitHub Pages deployment works without manual API URL entry. Override it to `http://localhost:8080` when testing against a local backend.
+>
+> Note: The demo only stores the API URL, presentation mode, and client ID between reloads. It intentionally does not persist project IDs or API keys.
 >
 > Note: The SDK's face-quality checks fetch MediaPipe assets from public URLs, so the demo still needs internet access even when the backend is local.
 >
