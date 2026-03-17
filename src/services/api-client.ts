@@ -4,7 +4,7 @@ async function getAPIErrorMessage(response: Response, fallback: string): Promise
   try {
     const err = await response.json() as Partial<APIError>;
     if (typeof err.error === 'string' && err.error.trim()) {
-      return err.error;
+      return err.error.trim();
     }
   } catch {
     // Ignore malformed or empty error payloads and fall back to a stable message.
