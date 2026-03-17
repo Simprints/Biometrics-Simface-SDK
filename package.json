@@ -41,7 +41,7 @@
     "demo:dev": "node ./scripts/demo-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -55,7 +55,7 @@
     "globals": "^17.4.0",
     "jsdom": "^25.0.0",
     "typescript": "^5.6.0",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.57.1",
     "vite": "^6.0.0",
     "vitest": "^4.0.0"
   }
