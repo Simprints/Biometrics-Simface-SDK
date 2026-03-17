@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SimFaceAPIClient } from '../services/api-client.js';
+import { DEFAULT_SIMFACE_API_URL } from '../shared/api-url.js';
+
+const DEFAULT_API_URL = DEFAULT_SIMFACE_API_URL;
 
 const mockConfig = {
-  apiUrl: 'https://api.example.com',
   projectId: 'test-project',
   apiKey: 'test-key',
+  apiUrl: 'https://api.example.com',
 };
 
 describe('SimFaceAPIClient', () => {
@@ -141,6 +144,39 @@ describe('SimFaceAPIClient', () => {
   });
 
   describe('URL handling', () => {
+    it('should use the hosted backend when apiUrl is omitted', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ valid: true }),
+      });
+
+      const client = new SimFaceAPIClient({
+        projectId: mockConfig.projectId,
+        apiKey: mockConfig.apiKey,
+      });
+      await client.validateAPIKey();
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${DEFAULT_API_URL}/api/v1/auth/validate`,
+        expect.anything(),
+      );
+    });
+
+    it('should treat a blank apiUrl as missing and use the hosted backend', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ valid: true }),
+      });
+
+      const client = new SimFaceAPIClient({ ...mockConfig, apiUrl: '   ' });
+      await client.validateAPIKey();
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${DEFAULT_API_URL}/api/v1/auth/validate`,
+        expect.anything(),
+      );
+    });
+
     it('should strip trailing slash from apiUrl', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

@@ -52,7 +52,6 @@ The release contains two builds:
 
 ```javascript
 const config = {
-  apiUrl: 'https://your-simface-api.run.app',
   projectId: 'your-project-id',
   apiKey: 'your-api-key',
 };
@@ -175,7 +174,7 @@ Parameters:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
+| `config` | `SimFaceConfig` | SDK configuration (`projectId`, `apiKey`, optional `apiUrl`) |
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
@@ -190,7 +189,7 @@ Parameters:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `config` | `SimFaceConfig` | SDK configuration (`apiUrl`, `projectId`, `apiKey`) |
+| `config` | `SimFaceConfig` | SDK configuration (`projectId`, `apiKey`, optional `apiUrl`) |
 | `clientId` | `string` | Unique identifier for the user |
 | `workflowOptions` | `SimFaceWorkflowOptions` | Optional popup/embedded-agnostic capture behavior |
 | `captureElement` | `SimFaceCaptureElement` | Optional embedded `simface-capture` element |
@@ -237,7 +236,6 @@ Use the `simface-capture` Web Component directly when you want the host applicat
 
   const captureEl = document.querySelector('simface-capture');
   const client = new SimFaceAPIClient({
-    apiUrl: 'https://your-simface-api.run.app',
     projectId: 'your-project-id',
     apiKey: 'your-api-key',
   });
@@ -296,9 +294,9 @@ This is more flexible, but it also means the host owns more of the workflow.
 
 ```typescript
 interface SimFaceConfig {
-  apiUrl: string;
   projectId: string;
   apiKey: string;
+  apiUrl?: string; // Defaults to the hosted SimFace backend
 }
 ```
 

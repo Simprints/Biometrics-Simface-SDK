@@ -1,4 +1,5 @@
 import type { SimFaceConfig, ValidateResult, EnrollResult, VerifyResult, APIError } from '../types/index.js';
+import { resolveApiUrl } from '../shared/api-url.js';
 
 async function getAPIErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
@@ -19,7 +20,7 @@ export class SimFaceAPIClient {
   private readonly apiKey: string;
 
   constructor(config: SimFaceConfig) {
-    this.apiUrl = config.apiUrl.replace(/\/$/, '');
+    this.apiUrl = resolveApiUrl(config.apiUrl);
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
   }

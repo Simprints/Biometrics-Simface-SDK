@@ -31,7 +31,6 @@ import { enroll, verify } from './index.js';
 
 describe('SDK entrypoints', () => {
   const config = {
-    apiUrl: 'https://example.invalid',
     projectId: 'project-1',
     apiKey: 'api-key',
   };
@@ -60,6 +59,7 @@ describe('SDK entrypoints', () => {
 
     const result = await enroll(config, 'user-1', workflowOptions, captureComponent);
 
+    expect(apiClientConstructor).toHaveBeenCalledWith(config);
     expect(captureMocks.captureFromCamera).toHaveBeenCalledWith(workflowOptions, captureComponent);
     expect(apiClientMethodMocks.validateAPIKey).toHaveBeenCalledTimes(1);
     expect(apiClientMethodMocks.enroll).toHaveBeenCalledWith('user-1', blob);
