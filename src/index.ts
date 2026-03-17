@@ -4,11 +4,13 @@
  * Usage:
  *   import { enroll, verify } from '@simprints/simface-sdk';
  *
+ *   const config = { projectId: '...', apiKey: '...' };
+ *
  *   // Enroll a new user
- *   const result = await enroll({ apiUrl: '...', projectId: '...', apiKey: '...' }, 'user-123');
+ *   const result = await enroll(config, 'user-123');
  *
  *   // Verify an existing user
- *   const result = await verify({ apiUrl: '...', projectId: '...', apiKey: '...' }, 'user-123');
+ *   const result = await verify(config, 'user-123');
  */
 
 import type {

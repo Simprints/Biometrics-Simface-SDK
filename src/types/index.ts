@@ -1,11 +1,11 @@
 /** Configuration for the SimFace SDK. */
 export interface SimFaceConfig {
-  /** Base URL of the SimFace API backend. */
-  apiUrl: string;
   /** Unique identifier for the project. */
   projectId: string;
   /** API key for authentication. */
   apiKey: string;
+  /** Optional base URL of the SimFace API backend. Defaults to the hosted SimFace backend. */
+  apiUrl?: string;
 }
 
 /** Result of an enrollment operation. */

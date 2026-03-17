@@ -1,4 +1,5 @@
 import type { SimFaceConfig, ValidateResult, EnrollResult, VerifyResult, APIError } from '../types/index.js';
+import { resolveApiUrl } from '../shared/api-url.js';
 
 export class SimFaceAPIClient {
   private readonly apiUrl: string;
@@ -6,7 +7,7 @@ export class SimFaceAPIClient {
   private readonly apiKey: string;
 
   constructor(config: SimFaceConfig) {
-    this.apiUrl = config.apiUrl.replace(/\/$/, '');
+    this.apiUrl = resolveApiUrl(config.apiUrl);
     this.projectId = config.projectId;
     this.apiKey = config.apiKey;
   }
