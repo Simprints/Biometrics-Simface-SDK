@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Simprints/LegoDay-Simprints-IDV-Frontend.git"
+    "url": "git+https://github.com/Simprints/Biometrics-Simface-SDK.git"
   },
-  "homepage": "https://github.com/Simprints/LegoDay-Simprints-IDV-Frontend#readme",
+  "homepage": "https://github.com/Simprints/Biometrics-Simface-SDK#readme",
   "bugs": {
-    "url": "https://github.com/Simprints/LegoDay-Simprints-IDV-Frontend/issues"
+    "url": "https://github.com/Simprints/Biometrics-Simface-SDK/issues"
   },
   "keywords": [
     "kyc",
