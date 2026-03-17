@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SimFaceAPIClient } from '../services/api-client.js';
+import { DEFAULT_SIMFACE_API_URL } from '../shared/api-url.js';
 
-const DEFAULT_API_URL = 'https://simface-api-85584555549.europe-west1.run.app';
+const DEFAULT_API_URL = DEFAULT_SIMFACE_API_URL;
 
 const mockConfig = {
   projectId: 'test-project',
