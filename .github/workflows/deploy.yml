@@ -25,7 +25,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 ships npm 11+ which is required for OIDC trusted publishing
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Compute version
@@ -73,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Build SDK
         run: |
