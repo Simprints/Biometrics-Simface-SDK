@@ -1,7 +1,7 @@
 import './styles.css';
 import '@simprints/simface-sdk';
 import { SimFaceAPIClient, enroll as sdkEnroll, verify as sdkVerify } from '@simprints/simface-sdk';
-import { DEFAULT_API_URL, readStoredConfig, writeStoredConfig } from './config-storage.js';
+import { DEFAULT_API_URL, normalizeApiUrl, readStoredConfig, writeStoredConfig } from './config-storage.js';
 
 const defaults = {
   apiUrl: DEFAULT_API_URL,
