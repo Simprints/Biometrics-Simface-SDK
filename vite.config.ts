@@ -2,6 +2,13 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Let vitest resolve the SDK package name when running demo tests.
+      // No SDK source file self-imports, so this only affects tests.
+      '@simprints/simface-sdk': resolve(__dirname, 'src/index.ts'),
+    },
+  },
   build: {
     emptyOutDir: false,
     lib: {
