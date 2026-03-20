@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/integration/**/*.test.ts'],
-    environment: 'jsdom',
+    environment: 'node',
     globals: true,
     testTimeout: 30_000,
     sequence: {
