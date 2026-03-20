@@ -42,6 +42,10 @@ function mockCanvasContext() {
 // Tests
 // ---------------------------------------------------------------------------
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('CameraAccessError', () => {
   it('is an instance of Error', () => {
     const err = new CameraAccessError('boom');
@@ -232,6 +236,12 @@ describe('resumeVideoPlayback', () => {
 // ---------------------------------------------------------------------------
 
 describe('blobToDataURL', () => {
+  const OriginalFileReader = globalThis.FileReader;
+
+  afterEach(() => {
+    globalThis.FileReader = OriginalFileReader;
+  });
+
   it('resolves with a data URL', async () => {
     const blob = new Blob(['hello'], { type: 'text/plain' });
     const result = await blobToDataURL(blob);
@@ -239,8 +249,6 @@ describe('blobToDataURL', () => {
   });
 
   it('rejects when FileReader errors', async () => {
-    const OriginalFileReader = globalThis.FileReader;
-
     globalThis.FileReader = class MockFileReader {
       onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
       onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
@@ -253,8 +261,6 @@ describe('blobToDataURL', () => {
     } as unknown as typeof FileReader;
 
     await expect(blobToDataURL(new Blob(['x']))).rejects.toThrow('Failed to read image');
-
-    globalThis.FileReader = OriginalFileReader;
   });
 });
 
@@ -262,9 +268,13 @@ describe('blobToDataURL', () => {
 
 describe('blobToImage', () => {
   const OriginalImage = globalThis.Image;
+  const OriginalCreateObjectURL = globalThis.URL.createObjectURL;
+  const OriginalRevokeObjectURL = globalThis.URL.revokeObjectURL;
 
   afterEach(() => {
     globalThis.Image = OriginalImage;
+    globalThis.URL.createObjectURL = OriginalCreateObjectURL;
+    globalThis.URL.revokeObjectURL = OriginalRevokeObjectURL;
   });
 
   it('resolves with an HTMLImageElement on success', async () => {

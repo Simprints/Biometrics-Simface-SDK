@@ -12,7 +12,7 @@
  *   SIMFACE_TEST_API_URL=https://... \
  *   SIMFACE_TEST_PROJECT_ID=... \
  *   SIMFACE_TEST_API_KEY=... \
- *   npx vitest run --project integration
+ *   npx vitest run --config vitest.integration.config.ts
  */
 
 import { describe, expect, it, beforeAll } from 'vitest';
@@ -38,7 +38,7 @@ function loadFixture(name: string): Blob {
   return new Blob([buffer], { type: 'image/jpeg' });
 }
 
-describe.skipIf(!hasCredentials)('SDK integration (live backend)', () => {
+describe.sequential.skipIf(!hasCredentials)('SDK integration (live backend)', () => {
   let client: SimFaceAPIClient;
   let faceA: Blob;
   let faceB: Blob;

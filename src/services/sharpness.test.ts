@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeSharpnessScore, laplacianVariance, MIN_SHARPNESS_SCORE } from './sharpness.js';
+import { REFERENCE_VARIANCE } from '../shared/capture-config.js';
 
 /**
  * Helper to create synthetic ImageData with a flat RGBA pixel array.
@@ -124,8 +125,6 @@ describe('MIN_SHARPNESS_SCORE', () => {
 // ---------------------------------------------------------------------------
 // computeSharpnessScore
 // ---------------------------------------------------------------------------
-
-const REFERENCE_VARIANCE = 800;
 
 function createMockVideo(width = 640, height = 480): HTMLVideoElement {
   const video = document.createElement('video');
