@@ -13,17 +13,11 @@ export interface SharpnessRegion {
   height: number;
 }
 
-/**
- * Reference Laplacian variance used to normalise the raw variance into a
- * 0–1 score.  Values at or above this are mapped to 1.0.  This was tuned
- * empirically against 640×480 webcam frames; it may need adjustment for
- * significantly different resolutions.
- */
-const REFERENCE_VARIANCE = 800;
-const GRAY_BUFFER_GROWTH_FACTOR = 1.5;
+import { REFERENCE_VARIANCE } from '../shared/capture-config.js';
 
-/** Minimum sharpness score (0–1) below which a frame is considered too blurry. */
-export const MIN_SHARPNESS_SCORE = 0.15;
+export { MIN_SHARPNESS_SCORE } from '../shared/capture-config.js';
+
+const GRAY_BUFFER_GROWTH_FACTOR = 1.5;
 
 const grayBuffersByCanvas = new WeakMap<HTMLCanvasElement, Float32Array>();
 

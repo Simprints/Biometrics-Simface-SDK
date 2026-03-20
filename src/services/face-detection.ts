@@ -2,13 +2,12 @@ import type { Detection, FaceDetector as MediaPipeFaceDetector } from '@mediapip
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
 import { evaluateFaceQuality } from './face-quality.js';
 import { computeSharpnessScore } from './sharpness.js';
-import type { FaceQualityResult } from '../types/index.js';
+import type { FaceQualityResult } from '../types';
+
+import { MIN_CONFIDENCE } from '../shared/capture-config.js';
 
 const WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
-
-// Minimum confidence to consider a face detected
-const MIN_CONFIDENCE = 0.7;
 let visionInstance: ReturnType<typeof FilesetResolver.forVisionTasks> | null = null;
 let imageDetectorInstance: Promise<MediaPipeFaceDetector> | null = null;
 let videoDetectorInstance: Promise<MediaPipeFaceDetector> | null = null;
