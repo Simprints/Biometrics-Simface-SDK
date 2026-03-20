@@ -24,5 +24,17 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    exclude: ['src/integration/**', 'node_modules/**'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/integration/**', 'src/**/*.test.ts'],
+      thresholds: {
+        statements: 85,
+        branches: 72,
+        functions: 85,
+        lines: 85,
+      },
+    },
   },
 });

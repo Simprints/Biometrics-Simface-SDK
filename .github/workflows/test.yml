@@ -24,8 +24,8 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Run frontend tests
-        run: npm test
+      - name: Run frontend tests with coverage
+        run: npm run test:coverage
 
       - name: Build SDK
         run: npm run build
@@ -37,3 +37,26 @@ jobs:
       - name: Build demo
         working-directory: demo
         run: npm run build
+
+  integration-test:
+    name: Integration Tests (Live Backend)
+    runs-on: ubuntu-latest
+    if: vars.SIMFACE_TEST_API_URL != ''
+    needs: frontend-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          SIMFACE_TEST_API_URL: ${{ vars.SIMFACE_TEST_API_URL }}
+          SIMFACE_TEST_PROJECT_ID: ${{ secrets.SIMFACE_TEST_PROJECT_ID }}
+          SIMFACE_TEST_API_KEY: ${{ secrets.SIMFACE_TEST_API_KEY }}

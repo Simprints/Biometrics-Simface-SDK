@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FaceQualityResult } from '../types/index.js';
+import type { FaceQualityResult } from '../types';
 
 const mediaPipeMocks = vi.hoisted(() => ({
   createFromOptions: vi.fn(),
@@ -26,17 +26,18 @@ vi.mock('@mediapipe/tasks-vision', () => ({
 vi.mock('./face-quality.js', () => faceQualityMocks);
 vi.mock('./sharpness.js', () => sharpnessMocks);
 
-import { assessFaceQualityForVideo } from './face-detection.js';
+import { assessFaceQuality, assessFaceQualityForVideo } from './face-detection.js';
 
 const MOCK_SHARPNESS_SCORE = 0.73;
 
-describe('assessFaceQualityForVideo', () => {
-  const detectForVideo = vi.fn();
+const detect = vi.fn();
+const detectForVideo = vi.fn();
 
+describe('assessFaceQualityForVideo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mediaPipeMocks.forVisionTasks.mockResolvedValue({});
-    mediaPipeMocks.createFromOptions.mockResolvedValue({ detectForVideo });
+    mediaPipeMocks.createFromOptions.mockResolvedValue({ detect, detectForVideo });
     sharpnessMocks.computeSharpnessScore.mockReturnValue(MOCK_SHARPNESS_SCORE);
   });
 
@@ -106,6 +107,59 @@ function createMediaPipeDetection(overrides: Partial<{ width: number; height: nu
       { x: 0.5, y: 0.53 },
     ],
   };
+}
+
+describe('assessFaceQuality', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mediaPipeMocks.forVisionTasks.mockResolvedValue({});
+    mediaPipeMocks.createFromOptions.mockResolvedValue({ detect, detectForVideo });
+  });
+
+  it('calls image detector with the image element', async () => {
+    detect.mockReturnValue({
+      detections: [createMediaPipeDetection()],
+    });
+    faceQualityMocks.evaluateFaceQuality.mockReturnValue(createQualityResult());
+
+    const img = createImageElement();
+    await assessFaceQuality(img);
+
+    expect(detect).toHaveBeenCalledWith(img);
+  });
+
+  it('does not pass resolveSharpnessScore for image mode', async () => {
+    detect.mockReturnValue({
+      detections: [createMediaPipeDetection()],
+    });
+    faceQualityMocks.evaluateFaceQuality.mockReturnValue(createQualityResult());
+
+    await assessFaceQuality(createImageElement());
+
+    expect(faceQualityMocks.evaluateFaceQuality).toHaveBeenCalledWith(
+      expect.not.objectContaining({ resolveSharpnessScore: expect.anything() }),
+    );
+  });
+
+  it('uses naturalWidth and naturalHeight from the image element', async () => {
+    detect.mockReturnValue({
+      detections: [createMediaPipeDetection()],
+    });
+    faceQualityMocks.evaluateFaceQuality.mockReturnValue(createQualityResult());
+
+    await assessFaceQuality(createImageElement(1920, 1080));
+
+    expect(faceQualityMocks.evaluateFaceQuality).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 1920, height: 1080 }),
+    );
+  });
+});
+
+function createImageElement(naturalWidth = 640, naturalHeight = 480) {
+  const img = new Image();
+  Object.defineProperty(img, 'naturalWidth', { value: naturalWidth });
+  Object.defineProperty(img, 'naturalHeight', { value: naturalHeight });
+  return img;
 }
 
 function createVideoElement() {
