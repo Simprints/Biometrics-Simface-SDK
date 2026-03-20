@@ -41,6 +41,8 @@
     "demo:dev": "node ./scripts/demo-dev.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint src vite.config.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -51,6 +53,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "eslint": "^9.0.0",
     "globals": "^17.4.0",
     "jsdom": "^25.0.0",

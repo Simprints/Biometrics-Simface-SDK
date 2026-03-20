@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SimFaceCaptureElement } from './types/index.js';
+import type { SimFaceCaptureElement } from './types';
 
 const captureMocks = vi.hoisted(() => ({
   captureFromCamera: vi.fn(),
@@ -84,5 +84,59 @@ describe('SDK entrypoints', () => {
       threshold: 0,
       message: 'Capture cancelled by user',
     });
+  });
+
+  it('returns cancelled result when enroll capture returns null', async () => {
+    captureMocks.captureFromCamera.mockResolvedValue(null);
+
+    const result = await enroll(config, 'user-1', { capturePreference: 'auto-preferred' });
+
+    expect(apiClientMethodMocks.enroll).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      success: false,
+      clientId: 'user-1',
+      message: 'Capture cancelled by user',
+    });
+  });
+
+  it('returns alreadyEnrolled result from API', async () => {
+    const blob = new Blob(['capture'], { type: 'image/jpeg' });
+    captureMocks.captureFromCamera.mockResolvedValue(blob);
+    apiClientMethodMocks.enroll.mockResolvedValue({
+      success: false,
+      clientId: 'user-1',
+      alreadyEnrolled: true,
+    });
+
+    const result = await enroll(config, 'user-1', { capturePreference: 'auto-preferred' });
+
+    expect(result).toEqual(expect.objectContaining({ alreadyEnrolled: true }));
+  });
+
+  it('verify() happy path returns match result from API', async () => {
+    const blob = new Blob(['capture'], { type: 'image/jpeg' });
+    captureMocks.captureFromCamera.mockResolvedValue(blob);
+    apiClientMethodMocks.verify.mockResolvedValue({
+      match: true,
+      score: 0.95,
+      threshold: 0.5,
+    });
+
+    const result = await verify(config, 'user-1', { capturePreference: 'auto-preferred' });
+
+    expect(apiClientMethodMocks.verify).toHaveBeenCalledWith('user-1', blob);
+    expect(result).toEqual({ match: true, score: 0.95, threshold: 0.5 });
+  });
+
+  it('enroll() propagates API key validation failure', async () => {
+    apiClientMethodMocks.validateAPIKey.mockRejectedValue(new Error('Invalid API key'));
+
+    await expect(enroll(config, 'user-1')).rejects.toThrow('Invalid API key');
+  });
+
+  it('verify() propagates API key validation failure', async () => {
+    apiClientMethodMocks.validateAPIKey.mockRejectedValue(new Error('Invalid API key'));
+
+    await expect(verify(config, 'user-1')).rejects.toThrow('Invalid API key');
   });
 });

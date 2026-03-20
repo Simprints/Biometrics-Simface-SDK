@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { laplacianVariance, MIN_SHARPNESS_SCORE } from './sharpness.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computeSharpnessScore, laplacianVariance, MIN_SHARPNESS_SCORE } from './sharpness.js';
 
 /**
  * Helper to create synthetic ImageData with a flat RGBA pixel array.
@@ -118,5 +118,98 @@ describe('MIN_SHARPNESS_SCORE', () => {
   it('is a positive number between 0 and 1', () => {
     expect(MIN_SHARPNESS_SCORE).toBeGreaterThan(0);
     expect(MIN_SHARPNESS_SCORE).toBeLessThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeSharpnessScore
+// ---------------------------------------------------------------------------
+
+const REFERENCE_VARIANCE = 800;
+
+function createMockVideo(width = 640, height = 480): HTMLVideoElement {
+  const video = document.createElement('video');
+  Object.defineProperty(video, 'videoWidth', { value: width, configurable: true });
+  Object.defineProperty(video, 'videoHeight', { value: height, configurable: true });
+  return video;
+}
+
+describe('computeSharpnessScore', () => {
+  let mockCtx: { drawImage: ReturnType<typeof vi.fn>; getImageData: ReturnType<typeof vi.fn> };
+  let getContextSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    mockCtx = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(),
+    };
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(mockCtx as unknown as CanvasRenderingContext2D);
+  });
+
+  afterEach(() => {
+    getContextSpy.mockRestore();
+  });
+
+  it('returns 0 when canvas context is unavailable', () => {
+    getContextSpy.mockReturnValue(null);
+    const video = createMockVideo();
+    const region = { x: 0, y: 0, width: 50, height: 50 };
+    expect(computeSharpnessScore(video, region)).toBe(0);
+  });
+
+  it('returns a normalised score for a video frame', () => {
+    const region = { x: 0, y: 0, width: 50, height: 50 };
+    mockCtx.getImageData.mockReturnValue(createEdgeImageData(50, 50, 0, 255));
+
+    const score = computeSharpnessScore(createMockVideo(), region);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('clamps score to 1 when variance exceeds REFERENCE_VARIANCE', () => {
+    const region = { x: 0, y: 0, width: 50, height: 50 };
+    // Checkerboard with cell size 1 produces very high Laplacian variance
+    mockCtx.getImageData.mockReturnValue(createCheckerboardImageData(50, 50, 0, 255, 1));
+
+    // Verify the underlying variance actually exceeds REFERENCE_VARIANCE
+    const varianceCheck = laplacianVariance(createCheckerboardImageData(50, 50, 0, 255, 1));
+    expect(varianceCheck).toBeGreaterThan(REFERENCE_VARIANCE);
+
+    const score = computeSharpnessScore(createMockVideo(), region);
+    expect(score).toBe(1);
+  });
+
+  it('returns 0 for uniform (blurry) regions', () => {
+    const region = { x: 0, y: 0, width: 50, height: 50 };
+    mockCtx.getImageData.mockReturnValue(createUniformImageData(50, 50, 128));
+
+    const score = computeSharpnessScore(createMockVideo(), region);
+    expect(score).toBe(0);
+  });
+
+  it('reuses provided canvas instead of creating a new one', () => {
+    const region = { x: 0, y: 0, width: 60, height: 40 };
+    mockCtx.getImageData.mockReturnValue(createEdgeImageData(60, 40, 0, 255));
+
+    const canvas = document.createElement('canvas');
+    computeSharpnessScore(createMockVideo(), region, canvas);
+
+    expect(canvas.width).toBe(region.width);
+    expect(canvas.height).toBe(region.height);
+  });
+
+  it('gray buffer reuse grows when region size increases', () => {
+    const canvas = document.createElement('canvas');
+
+    // First call – small region
+    const smallRegion = { x: 0, y: 0, width: 10, height: 10 };
+    mockCtx.getImageData.mockReturnValue(createEdgeImageData(10, 10, 0, 255));
+    expect(() => computeSharpnessScore(createMockVideo(), smallRegion, canvas)).not.toThrow();
+
+    // Second call – larger region forces buffer growth
+    const largeRegion = { x: 0, y: 0, width: 50, height: 50 };
+    mockCtx.getImageData.mockReturnValue(createEdgeImageData(50, 50, 0, 255));
+    expect(() => computeSharpnessScore(createMockVideo(), largeRegion, canvas)).not.toThrow();
   });
 });
