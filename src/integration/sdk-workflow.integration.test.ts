@@ -42,6 +42,7 @@ describe.skipIf(!hasCredentials)('SDK integration (live backend)', () => {
   let client: SimFaceAPIClient;
   let faceA: Blob;
   let faceB: Blob;
+  let faceC: Blob;
 
   beforeAll(() => {
     client = new SimFaceAPIClient({
@@ -52,6 +53,7 @@ describe.skipIf(!hasCredentials)('SDK integration (live backend)', () => {
 
     faceA = loadFixture('face-a.jpg');
     faceB = loadFixture('face-b.jpg');
+    faceC = loadFixture('face-c.jpg');
   });
 
   it('validates the API key', async () => {
@@ -67,15 +69,15 @@ describe.skipIf(!hasCredentials)('SDK integration (live backend)', () => {
     expect(result.alreadyEnrolled).toBeFalsy();
   }, 30_000);
 
-  it('verifies the enrolled user with face-a (match)', async () => {
-    const result = await client.verify(CLIENT_ID, faceA);
+  it('verifies the enrolled user with face-b (same person, match)', async () => {
+    const result = await client.verify(CLIENT_ID, faceB);
     expect(result.match).toBe(true);
     expect(result.score).toBeGreaterThan(0);
     expect(result.notEnrolled).toBeFalsy();
   }, 30_000);
 
-  it('verifies the enrolled user with face-b (no match)', async () => {
-    const result = await client.verify(CLIENT_ID, faceB);
+  it('verifies the enrolled user with face-c (different person, no match)', async () => {
+    const result = await client.verify(CLIENT_ID, faceC);
     expect(result.match).toBe(false);
     expect(result.notEnrolled).toBeFalsy();
   }, 30_000);

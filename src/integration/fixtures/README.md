@@ -7,8 +7,9 @@ against the real SimFace backend.
 
 | File | Purpose |
 |------|---------|
-| `face-a.jpg` | **Placeholder** — solid-color image for transport-layer testing. |
-| `face-b.jpg` | **Placeholder** — solid-color image for transport-layer testing. |
+| `face-a.jpg` | **Placeholder** — replace with a real face photo (Person A, enrollment image). |
+| `face-b.jpg` | **Placeholder** — replace with a real face photo (Person A, verification image — should match face-a). |
+| `face-c.jpg` | **Placeholder** — replace with a real face photo (Person B — should NOT match face-a/b). |
 
 ## Replacing with real face images
 
@@ -17,7 +18,8 @@ photographs. Requirements:
 
 - JPEG format, ≥ 200×200 px
 - Single face clearly visible, frontal pose
-- `face-a.jpg` and `face-b.jpg` should be **different people** (to test no-match)
+- `face-a.jpg` and `face-b.jpg` should be the **same person** (to test match)
+- `face-c.jpg` should be a **different person** (to test no-match)
 - Use images you have permission to use (e.g. your own photos or an open dataset
   like [LFW](http://vis-www.cs.umass.edu/lfw/) or
   [Generated Photos](https://generated.photos))
